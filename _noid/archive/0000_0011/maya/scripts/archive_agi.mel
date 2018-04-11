@@ -1,0 +1,52 @@
+//if( windowPref("-ex", "agi2a_win") )  windowPref("-r", "agi2a_win");
+
+
+global string $agi2a_fileName= "";
+
+
+// arc_agi2Arc
+// --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_agi2Arc(string $fileName)
+{
+	int $r= arc_systemCommand("%ARCHIVE_PATH%/bin/agi2archive.exe "+$fileName);
+	if($r==0)
+	{
+		string $node= arc_createNode();
+		setAttr($node+".filePrefix", "-type", "string", dirname($fileName)+"/"+basename($fileName, ""));
+
+		window -e -vis 0 agi2a_win;
+	}
+}
+
+
+/// arc_agi2Arc_opt
+/// --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_agi2Arc_opt()
+{
+	global string $agi2a_fileName;
+
+	// window
+	if(`window -ex agi2a_win`) {window -e -vis 1 agi2a_win; return;}
+	window -ret -w 1000 -s 0 -t "AGISoft to Archive" agi2a_win;
+
+	frameLayout -cll 0 -lv 0 -bv 0 -mw 5 -mh 5;
+	columnLayout -adj 1;
+
+	// fileName
+	rowLayout -numberOfColumns 3 -adj 2 -cw3 80 680 24 -ct3 "right" "both" "both" -co3 5 0 0;
+ 		text -h 24 -label "fileName";
+		textField -h 24 -tx $agi2a_fileName -cc "$agi2a_fileName= `textField -q -fi agi2a_tf1`;" agi2a_tf1;
+		symbolButton -h 24 -image "navButtonBrowse.xpm" -c "$agi2a_fileName= arc_browseFile($agi2a_fileName, 0, \"*.txt\"); textField -e -fi $agi2a_fileName agi2a_tf1;";
+		setParent ..;
+
+	//separator -h 3 -st "none" -bgc 0.361 0.408 0.455;
+	separator -hr true -h 12 -st "single";
+
+	// EXECUTE
+	button -h 24 -label "OK" -c ("setFocus agi2a_b1; arc_agi2Arc($agi2a_fileName);") agi2a_b1;
+
+	setParent ..;
+	setParent ..;
+
+	showWindow;
+}

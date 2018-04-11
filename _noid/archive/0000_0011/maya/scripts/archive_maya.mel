@@ -1,0 +1,79 @@
+source "archive_base.mel";
+source "archive_globals.mel";
+source "archive_export.mel";
+source "archive_addAttribute.mel";
+source "archive_agi.mel";
+source "archive_instancer.mel";
+
+
+//  arc_createShapeNode
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_createShapeNode() {createNode("shapeNode");}
+
+
+//  arc_createShapeLightNode
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_createShapeLightNode() {createNode("shapeLightNode");}
+
+
+//  arc_createArchiveNode
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc string arc_createArchiveNode()
+{
+	string $t= createNode("transform", "-n", "archive1");
+
+	string $an= substituteAllString($t, "archive", "archiveNode");
+	$an= createNode("archiveNode", "-ss", "-n", $an, "-p", $t);
+
+	setAttr($an+".visibleInReflections", 1);
+	setAttr($an+".visibleInRefractions", 1);
+
+	return $an;
+}
+
+
+//  arc_createMenu
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_createMenu()
+{
+	global string $gMainWindow;
+	setParent $gMainWindow;
+
+	menu -l "Archive" archiveMenu;
+	setParent -menu archiveMenu;
+
+	menuItem -l "Globals" -c "arc_globals_opt()";
+
+	menuItem -divider true;
+	menuItem -l "Export Archive" -i "ptcExport.png" -c "arc_export_opt()";
+	menuItem -l "Import Archive" -i "ptcNode.png" -c "arc_createArchiveNode()";
+
+	menuItem -divider true;
+
+	menuItem -l "Create Shape" -c "arc_createShapeNode()";
+	menuItem -l "Create ShapeLight" -c "arc_createShapeLightNode()";
+
+	menuItem -divider true;
+
+	menuItem -l "Add Attribute To Selection" -c "arc_addAttribute_opt()";
+
+	menuItem -divider true;
+
+	menuItem -l "Tools" -sm true;
+		menuItem -l "Import AGISoft" -i "agi2ptc.png" -c "arc_agi2Arc_opt()";
+		menuItem -l "Instancer" -i "archiveInstance.png" -c "arc_instancer_opt()";
+
+	setParent -menu archiveMenu;
+
+	menuItem -divider true;
+
+	menuItem -l "Purge Display Caches";
+}
+
+
+//  arc_releaseMenu
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_releaseMenu()
+{
+	deleteUI -menu archiveMenu;
+}

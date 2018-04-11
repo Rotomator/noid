@@ -1,0 +1,24 @@
+VRayArchiveTex VRayArchiveTex {
+	"attrFreq" enum		"attrFreq" enum INPUT
+	"attrName" string	"attrName" string INPUT
+	"defaultColor" texture	"defaultColor" texture INPUT
+	"modulo" boolean	"modulo" boolean INPUT
+	"divisor" integer	"divisor" integer INPUT
+
+	"" texture		"outColor" texture OUTPUT
+	"" texture_red		"outColorR" number OUTPUT
+	"" texture_green	"outColorG" number OUTPUT
+	"" texture_blue		"outColorB" number OUTPUT
+	"" texture_alpha	"outAlpha" number OUTPUT
+}
+
+
+VRayModulo VRayModulo {
+	"plugin_id" number	"value" 528449 INPUT
+	"classification" string	"value" utility/general/ INPUT
+
+	"input" number		"input" number INPUT
+	"max" integer		"max" integer INPUT min:1 default:1
+
+	"" number		"output" number OUTPUT
+}

@@ -1,0 +1,35 @@
+//if( windowPref("-ex", "arcGlobals_win") )  windowPref("-r", "arcGlobals_win");
+
+
+//  arc_globals
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_globals_opt()
+{
+	if( ! objExists("__archiveGlobals__") )
+	{
+		createNode("archiveGlobalsNode", "-s", "-n", "__archiveGlobals__");
+		lockNode("__archiveGlobals__");
+	}
+
+	select -r "__archiveGlobals__";
+
+	ShowAttributeEditorOrChannelBox;
+
+	/*if(`window -ex arcGlobals_win`) {window -e -vis 1 arcGlobals_win; return;}
+	window -ret -w 640 -t "Archive Globals" arcGlobals_win;
+
+	frameLayout -cll 0 -lv 0 -bv 0 -mw 5 -mh 5;
+	columnLayout -adj 1;
+
+	rowLayout -nc 2 -cw2 64 132 -adj 2 -ct2 "right" "both" -co2 5 0;
+		text -l "context";
+		textField -h 24 contextCTRL;
+	setParent ..;
+
+	connectControl contextCTRL ("__archiveGlobals__.context");
+
+	setParent ..;
+	setParent ..;
+
+	showWindow;*/
+}

@@ -1,0 +1,181 @@
+//  AEarchiveNodeBrowseFile
+//  ================================================================================================================================
+global proc AEarchiveNodeBrowseFile(string $nodeName)
+{
+	string $n[];
+	tokenize($nodeName, ".", $n);
+
+	string $file= getAttr($n[0]+".filePrefix");
+	$file= dirname($file);
+	if($file!="") $file+= "/";
+	$file+= "*.a";
+
+	$file= fileDialog("-m", 0, "-dm", $file);
+	if($file=="") return;
+
+	setAttr($n[0]+".filePrefix", "-type", "string", $file);
+}
+
+
+//  AEarchiveNodeOpenFile
+//  ================================================================================================================================
+global proc AEarchiveNodeOpenFile(string $nodeName)
+{
+	string $n[];
+	tokenize($nodeName, ".", $n);
+
+	string $file= getAttr($n[0]+".filePrefix");
+	exec("cmd /c %ARCHIVE_PATH%/bin/archiveViewer.exe "+$file);
+}
+
+
+//  AEarchiveNodeFileNew
+//  ================================================================================================================================
+global proc AEarchiveNodeFileNew(string $nodeName)
+{
+	string $n[];
+	tokenize($nodeName, ".", $n);
+
+	setUITemplate -pst attributeEditorTemplate;
+
+	// file options
+	frameLayout -l "File Options" -la "top" -cl 0 -cll 1;
+		columnLayout -adj 1;
+
+			rowLayout -nc 4 -cw4 128 68 32 32 -adj 2;
+				text -l "filePrefix";
+				textField -h 24 filePrefixCTRL;
+				symbolButton -image "navButtonBrowse.xpm" -c ("AEarchiveNodeBrowseFile "+$nodeName) browseButton;
+				symbolButton -image "search.png" -c ("AEarchiveNodeOpenFile "+$nodeName) openButton;
+			setParent ..;
+
+			rowLayout -nc 2 -cw2 128 132 -adj 2;
+				text -label "animationMode";
+				optionMenu -h 24 animationModeCTRL;
+					menuItem -l "off" -da 0;
+					menuItem -l "relFrameOffset" -da 1;
+					menuItem -l "absFrame" -da 2;
+			setParent ..;
+
+			rowLayout -nc 2 -cw2 128 132 -adj 2;
+				text -l "relFrameOffset";
+				floatField -h 24 -pre 3 relFrameOffsetCTRL;
+			setParent ..;
+
+			rowLayout -nc 2 -cw2 128 132 -adj 2;
+				text -l "absFrame";
+				floatField -h 24 -pre 3 absFrameCTRL;
+			setParent ..;
+
+		setParent ..;
+	setParent ..;
+
+	// Render Stats
+	frameLayout -l "Render Stats" -la "top" -cl 0 -cll 1;
+		columnLayout -adj 1;
+
+			rowLayout -nc 2 -cw2 128 132 -adj 2;
+				text -label "Primary Visibility";
+				checkBox -h 24 -l "" vCameraCTRL;
+			setParent ..;
+
+			rowLayout -nc 2 -cw2 128 132 -adj 2;
+				text -label "Casts Shadows";
+				checkBox -h 24 -l "" vShadowCTRL;
+			setParent ..;
+
+			rowLayout -nc 2 -cw2 128 132 -adj 2;
+				text -label "Visible In Reflections";
+				checkBox -h 24 -l "" vReflectionCTRL;
+			setParent ..;
+
+			rowLayout -nc 2 -cw2 128 132 -adj 2;
+				text -label "Visible In Refractions";
+				checkBox -h 24 -l "" vRefractionCTRL;
+			setParent ..;
+
+		setParent ..;
+	setParent ..;
+
+	// view options
+	frameLayout -l "view options" -la "top" -cl 0 -cll 1;
+		columnLayout -adj 1;
+
+			rowLayout -nc 2 -cw2 128 132 -adj 2;
+				text -l "viewType";
+				optionMenu -h 24 viewModeCTRL;
+					menuItem -label "off" -da 0;
+					menuItem -label "proxy" -da 1;
+					menuItem -label "full" -da 2;
+			setParent ..;
+
+			rowLayout -nc 2 -cw2 128 132 -adj 2;
+				text -l "pointSize";
+				intField -h 24 pointSizeCTRL;
+			setParent ..;
+
+			rowLayout -nc 2 -cw2 128 132 -adj 2;
+				text -l "view bbox";
+				checkBox -h 24 -l "" viewBboxCTRL;
+			setParent ..;
+
+		setParent ..;
+	setParent ..;
+
+	connectControl filePrefixCTRL ($n[0]+".filePrefix");
+	connectControl animationModeCTRL ($n[0]+".animationMode");
+	connectControl relFrameOffsetCTRL ($n[0]+".relFrameOffset");
+	connectControl absFrameCTRL ($n[0]+".absFrame");
+
+	connectControl vCameraCTRL ($n[0]+".primaryVisibility");
+	connectControl vShadowCTRL ($n[0]+".castsShadows");
+	connectControl vReflectionCTRL ($n[0]+".visibleInReflections");
+	connectControl vRefractionCTRL ($n[0]+".visibleInRefractions");
+
+	connectControl viewModeCTRL ($n[0]+".viewType");
+	connectControl pointSizeCTRL ($n[0]+".pointSize");
+	connectControl viewBboxCTRL ($n[0]+".viewBBox");
+
+	setUITemplate -ppt;
+}
+
+
+//  AEarchiveNodeFileReplace
+//  ================================================================================================================================
+global proc AEarchiveNodeFileReplace(string $nodeName)
+{
+	string $n[];
+	tokenize($nodeName, ".", $n);
+
+	connectControl filePrefixCTRL ($n[0]+".filePrefix");
+	symbolButton -e -c ("AEarchiveNodeBrowseFile "+$nodeName) browseButton;
+	button -e -c ("AEarchiveNodeOpenFile "+$nodeName) openButton;
+	connectControl animationModeCTRL ($n[0]+".animationMode");
+	connectControl relFrameOffsetCTRL ($n[0]+".relFrameOffset");
+	connectControl absFrameCTRL ($n[0]+".absFrame");
+
+	connectControl vCameraCTRL ($n[0]+".primaryVisibility");
+	connectControl vShadowCTRL ($n[0]+".castsShadows");
+	connectControl vReflectionCTRL ($n[0]+".visibleInReflections");
+	connectControl vRefractionCTRL ($n[0]+".visibleInRefractions");
+
+	connectControl viewModeCTRL ($n[0]+".viewType");
+	connectControl pointSizeCTRL ($n[0]+".pointSize");
+	connectControl viewBboxCTRL ($n[0]+".viewBBox");
+}
+
+
+//  AEarchiveNodeTemplate
+//  ================================================================================================================================
+global proc AEarchiveNodeTemplate(string $nodeName)
+{
+	editorTemplate -bsl;
+
+	editorTemplate -ccu "AEarchiveNodeFileNew" "AEarchiveNodeFileReplace" $nodeName;
+
+	editorTemplate -aec;
+	editorTemplate -ccu "arc_suppressExtraNew" "arc_suppressExtraReplace";
+
+	editorTemplate -esl;
+}
+

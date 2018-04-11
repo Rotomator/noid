@@ -1,0 +1,103 @@
+//if( windowPref("-ex", "arc_aats_win") ) windowPref("-r", "arc_aats_win");
+
+
+global string $arc_aats_name= "";
+global string $arc_aats_type= "int";
+
+
+//  arc_export
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_addAttribute(string $name, string $type)
+{
+	if( ! startsWith($name, "a_") ) $name= "a_"+$name;
+
+	string $nodes[]= selectedNodes();
+
+	for($i= 0; $i<size($nodes); $i+= 1)
+	{
+		if( ! attributeExists($name, $nodes[$i]) )
+		{
+			switch($type)
+			{
+			case "float":
+				addAttr("-ln", $name, "-at", "float", "-dv", 0, $nodes[$i]);
+				break;
+
+			case "color":
+				addAttr("-ln", $name, "-at", "float3", "-uac", $nodes[$i]);
+				addAttr("-ln", $name+"R", "-at", "float", "-p", $name, $nodes[$i]);
+				addAttr("-ln", $name+"G", "-at", "float", "-p", $name, $nodes[$i]);
+				addAttr("-ln", $name+"B", "-at", "float", "-p", $name, $nodes[$i]);
+				break;
+
+			case "vector":
+				addAttr("-ln", $name, "-at", "float3", $nodes[$i]);
+				addAttr("-ln", $name+"X", "-at", "float", "-p", $name, $nodes[$i]);
+				addAttr("-ln", $name+"Y", "-at", "float", "-p", $name, $nodes[$i]);
+				addAttr("-ln", $name+"Z", "-at", "float", "-p", $name, $nodes[$i]);
+				break;
+
+			case "string":
+				addAttr("-ln", $name, "-dt", "string", $nodes[$i]);
+				break;
+
+			default:
+				addAttr("-ln", $name, "-at", "long", "-dv", 0, $nodes[$i]);
+				break;
+			}
+		}
+	}
+
+	//window -e -vis 0 arc_aats_win;
+}
+
+
+//  arc_export_opt
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_addAttribute_opt()
+{
+	global string $arc_aats_name;
+	global string $arc_aats_type;
+
+	// window
+	if(`window -ex arc_aats_win`) {window -e -vis 1 arc_aats_win; return;}
+	window -ret -s 0 -t "Add Attribute To Selection" arc_aats_win;
+
+	//window -ret -s 0 -t "Add Attribute To Selection";
+
+	frameLayout -cll 0 -lv 0 -bv 0 -mw 5 -mh 5;
+	columnLayout -adj 1;
+
+		// name
+		rowLayout -numberOfColumns 2 -adj 2 -cw2 60 140 -ct2 "right" "both" -co2 5 0;
+			text -h 24 -label "name";
+			textField -h 24 -tx $arc_aats_name -cc "$arc_aats_name= \"#1\";";
+		setParent ..;
+
+		// type
+		rowLayout -numberOfColumns 2 -adj 2 -cw2 60 140 -ct2 "right" "both" -co2 5 0;
+			text -h 24 -label "type";
+			optionMenu -h 24 -cc "$arc_aats_type= \"#1\";" arc_aats_menu;
+				menuItem -label "int";
+				menuItem -label "float";
+				menuItem -label "vector";
+				menuItem -label "color";
+				menuItem -label "string";
+		setParent ..;
+
+		separator -hr true -h 12 -st "single";
+
+		// OK / CANCEL
+		rowLayout -numberOfColumns 2 -cw2 150 150 -ct2 "both" "both";
+			button -h 24 -label "OK" -c ("setFocus \"arc_aats_win\"; arc_addAttribute($arc_aats_name, $arc_aats_type);");
+			button -h 24 -label "CANCEL" -c ("setFocus \"arc_aats_win\"; window -e -vis 0 arc_aats_win;");
+		setParent ..;
+
+	setParent ..;
+	setParent ..;
+
+	//window -e -rtf true arc_aats_win;
+	optionMenu -e -v $arc_aats_type arc_aats_menu;
+
+	showWindow;
+}

@@ -1,0 +1,23 @@
+//  AEarchiveNodeTemplate
+//  ================================================================================================================================
+global proc AEVRayArchiveTexTemplate(string $nodeName)
+{
+	editorTemplate -bsl;
+
+	editorTemplate -beginLayout "Attribute" -collapse 0;
+		editorTemplate -addControl "attrFreq";
+		editorTemplate -addControl "attrName";
+		editorTemplate -addControl "defaultColor";
+	editorTemplate -endLayout;
+
+	editorTemplate -beginLayout "Modulo" -collapse 0;
+		editorTemplate -addControl "modulo";
+		editorTemplate -addControl "divisor";
+	editorTemplate -endLayout;
+
+	editorTemplate -aec;
+	editorTemplate -ccu "arc_suppressExtraNew" "arc_suppressExtraReplace";
+
+	editorTemplate -esl;
+}
+

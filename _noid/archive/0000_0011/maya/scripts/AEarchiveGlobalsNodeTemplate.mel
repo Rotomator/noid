@@ -1,0 +1,47 @@
+//  AEarchiveGlobalsNodeFileNew
+//  ================================================================================================================================
+global proc AEarchiveGlobalsNodeFileNew(string $nodeName)
+{
+	string $n[];
+
+	tokenize($nodeName, ".", $n);
+
+	setUITemplate -pst attributeEditorTemplate;
+
+	rowLayout -nc 2 -cw2 64 132 -adj 2;
+		text -l "context";
+		textField -h 24 contextCTRL;
+	setParent ..;
+
+	connectControl contextCTRL ($n[0]+".context");
+
+	setUITemplate -ppt;
+}
+
+
+//  AEarchiveGlobalsNodeFileReplace
+//  ================================================================================================================================
+global proc AEarchiveGlobalsNodeFileReplace(string $nodeName)
+{
+	string $n[];
+
+	tokenize($nodeName, ".", $n);
+
+	connectControl contextCTRL ($n[0]+".context");
+}
+
+
+//  AEarchiveGlobalsNodeTemplate
+//  ================================================================================================================================
+global proc AEarchiveGlobalsNodeTemplate(string $nodeName)
+{
+	editorTemplate -bsl;
+
+	editorTemplate -ccu "AEarchiveGlobalsNodeFileNew" "AEarchiveGlobalsNodeFileReplace" $nodeName;
+
+	editorTemplate -aec;
+	editorTemplate -ccu "arc_suppressExtraNew" "arc_suppressExtraReplace";
+
+	editorTemplate -esl;
+}
+

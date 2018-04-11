@@ -1,0 +1,179 @@
+//if( windowPref("-ex", "arcInst_win") )  windowPref("-r", "arcInst_win");
+
+
+global string $arcInst_out= "";
+global int $arcInst_s= 1;
+global int $arcInst_e= 1;
+
+global string $arcInst_default;
+global string $arcInst_tmp;
+global string $arcInst_file;
+
+
+//  arc_instancer
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_instancer()
+{
+	global string $arcInst_out;
+	global int $arcInst_s;
+	global int $arcInst_e;
+
+	global string $arcInst_tmp;
+
+	int $r;
+
+	// run command 'archiveInstancer'
+	string $cmd= "%ARCHIVE_PATH%/bin/archiveInstancer.exe "+$arcInst_out+" -anim "+$arcInst_s+" "+$arcInst_e+" "+$arcInst_tmp;
+	$r= arc_systemCommand($cmd); if( $r ) return;
+
+	// run command 'archive2prx'
+	$cmd= "%ARCHIVE_PATH%/bin/archive2prx.exe "+$arcInst_out;
+	$r= arc_systemCommand($cmd); if( $r ) return;
+
+	// create archiveNode
+	string $node= arc_createArchiveNode();
+	setAttr($node+".filePrefix", "-type", "string", $arcInst_out);
+	setAttr($node+".animationMode", 1);
+
+	window -e -vis 0 arcInst_win;
+}
+
+
+//  arc_instancer_getCurrentCfg
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc string arc_instancer_getCurrentCfg()
+{
+	return `scrollField -q -tx arcInst_cfg`;
+}
+
+
+//  arc_instancer_saveCurrentCfg
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_instancer_saveCurrentCfg()
+{
+	global string $arcInst_tmp;
+
+	string $str= arc_instancer_getCurrentCfg();
+	arc_writeString($arcInst_tmp, $str);
+}
+
+//  arc_instancer_setCurrentCfg
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_instancer_setCurrentCfg(string $str)
+{
+	global string $arcInst_tmp;
+
+	scrollField -e -tx $str arcInst_cfg;
+	arc_instancer_saveCurrentCfg();
+}
+
+
+//  arc_instancer_loadCfg
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_instancer_loadCfg()
+{
+	global string $arcInst_file;
+
+	string $fileName= arc_browseFile($arcInst_file, 0, "*.txt"); if($fileName=="") return;
+	$arcInst_file= $fileName;
+
+	string $str= arc_readString($arcInst_file);
+	arc_instancer_setCurrentCfg($str);
+}
+
+
+//  arc_instancer_saveAsCfg
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_instancer_saveAsCfg()
+{
+	global string $arcInst_file;
+
+	string $fileName= arc_browseFile($arcInst_file, 1, "*.txt"); if($fileName=="") return;
+	$arcInst_file= $fileName;
+
+	string $str= arc_instancer_getCurrentCfg();
+	arc_writeString($arcInst_file, $str);
+}
+
+
+//  arc_instancer_resetCfg
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_instancer_resetCfg()
+{
+	global string $arcInst_default;
+
+	string $str= arc_readString($arcInst_default);
+	arc_instancer_setCurrentCfg($str);
+}
+
+
+//  arc_instancer_opt
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_instancer_opt()
+{
+	global string $arcInst_out;
+	global int $arcInst_s;
+	global int $arcInst_e;
+	global string $arcInst_default;
+	global string $arcInst_tmp;
+	global string $arcInst_file;
+
+	// window
+	if(`window -ex arcInst_win`) {window -e -vis 1 arcInst_win; return;}
+	window -ret -w 1000 -t "Archive Instancer" arcInst_win;
+
+	$arcInst_default= getenv("ARCHIVE_PATH")+"/maya/scripts/archive_instancer_default.txt";
+	$arcInst_tmp= getenv("ARCHIVE_PATH")+"/maya/scripts/archive_instancer.txt";
+	$arcInst_file= $arcInst_tmp;
+
+	frameLayout -cll 0 -lv 0 -bv 0 -mw 5 -mh 5;
+	columnLayout -adj 1;
+
+		// output
+		text -h 24 -l "Output" -fn "boldLabelFont";
+
+		// file
+		rowLayout -nc 3 -adj 2 -cw3 80 680 24 -ct3 "right" "both" "both" -co3 3 0 0;
+			text -l "output file";
+			textField -h 24 -tx $arcInst_out -cc "$arcInst_out= `textField -q -fi arcInst_tf1`;" arcInst_tf1;
+			symbolButton -image "navButtonBrowse.xpm" -c "$arcInst_out= arc_browseFile($arcInst_out, 1, \"*.a\"); textField -e -fi $arcInst_out arcInst_tf1;";
+		setParent ..;
+
+		// start / end
+		rowLayout -nc 3 -cw3 80 80 80 -ct3 "right" "both" "both" -co3 3 0 0;
+			text -l "start / end";
+			intField -h 24 -v $arcInst_s -cc "$arcInst_s= #1";
+			intField -h 24 -v $arcInst_e -cc "$arcInst_e= #1";
+		setParent ..;
+
+		separator -hr true -h 12 -st "single";
+
+		// config
+		text -h 24 -l "Config" -fn "boldLabelFont";
+
+		rowLayout -h 400 -nc 2 -adj 1 -cw2 680 90 -ct2 "both" "both" -co2 3 0 -rat 1 "both" 0 -rat 2 "both" 0;
+			scrollField -cc "arc_instancer_saveCurrentCfg()" arcInst_cfg;
+			columnLayout -adj 1 -rs 5;
+				button -h 24 -label "Load" -c ("setFocus arcInst_ldBtn; arc_instancer_loadCfg();") arcInst_ldBtn;
+				button -h 24 -label "Save As..." -c ("setFocus arcInst_saBtn; arc_instancer_saveAsCfg();") arcInst_saBtn;
+				separator -h 24 -st "none";
+				button -h 24 -label "Reset" -c ("setFocus arcInst_rsBtn; arc_instancer_resetCfg();") arcInst_rsBtn;
+			setParent ..;
+
+		setParent ..;
+
+		separator -hr true -h 12 -st "single";
+
+		// OK
+		button -h 24 -l "OK" -c ("setFocus arcInst_b1; arc_instancer();") arcInst_b1;
+
+	setParent ..;
+	setParent ..;
+
+	string $str= arc_readString($arcInst_tmp);
+	if($str=="") $str= arc_readString($arcInst_default);
+
+	arc_instancer_setCurrentCfg($str);
+
+	window -e -vis 1 arcInst_win;
+}

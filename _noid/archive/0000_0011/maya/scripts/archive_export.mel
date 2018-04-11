@@ -1,0 +1,139 @@
+//if( windowPref("-ex", "maya2a_win") )  windowPref("-r", "maya2a_win");
+
+
+global string $maya2a_prefix= "";
+global int $maya2a_all= 1;
+global string $maya2a_attr= "N, ST, Cd";
+global int $maya2a_anim= 0;
+global int $maya2a_as= 1, $maya2a_ae= 24;
+global int $maya2a_s= 1;
+global int $maya2a_gs= 0;
+global int $maya2a_gmf= 1;
+global int $maya2a_cp= 1;
+
+
+//  arc_export
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_export(string $prefix, int $all, string $attributes, int $anim, int $animStart, int $animEnd, int $samples, int $gs, int $gmf, int $cp)
+{
+	string $cmd= "exportArchive";
+	$cmd+= " -attr \""+$attributes+"\"";
+	$cmd+= " -all "+$all;
+	if( $anim )
+	{
+		$cmd+= " -anim "+$animStart+" "+$animEnd;
+		$cmd+= " -s \""+$samples+"\"";
+	}
+	$cmd+= " -gs \""+$gs+"\"";
+	$cmd+= " -gmf \""+$gmf+"\"";
+	$cmd+= " \""+$prefix+"\";";
+
+	print($cmd+"\n");
+	eval($cmd);
+
+	if( $cp ) arc_systemCommand("%ARCHIVE_PATH%/bin/archive2prx.exe "+$prefix);
+
+	//if( windowPref("-ex", "maya2a_win") ) window -e -vis 0 maya2a_win;
+}
+
+
+//  arc_export_opt
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_export_opt()
+{
+	global string $maya2a_prefix;
+	global int $maya2a_all;
+	global string $maya2a_attr;
+	global int $maya2a_anim;
+	global int $maya2a_as, $maya2a_ae;
+	global int $maya2a_s;
+	global int $maya2a_gs;
+	global int $maya2a_gmf;
+	global int $maya2a_cp;
+
+	// window
+	if(`window -ex maya2a_win`) {window -e -vis 1 maya2a_win; return;}
+	window -ret -w 1000 -s 0 -t "Export Archive" maya2a_win;
+
+	frameLayout -cll 0 -lv 0 -bv 0 -mw 5 -mh 5;
+	columnLayout -adj 1;
+
+	// prefix
+	rowLayout -numberOfColumns 3 -adj 2 -cw3 140 680 24 -ct3 "right" "both" "both" -co3 5 0 0;
+		text -h 24 -label "prefix";
+		textField -h 24 -tx $maya2a_prefix -cc "$maya2a_prefix= `textField -q -fi maya2a_tf1`;" maya2a_tf1;
+		symbolButton -h 24 -image "navButtonBrowse.xpm" -c "$maya2a_prefix= arc_browseFile($maya2a_prefix, 1, \"*.a\"); textField -e -fi $maya2a_prefix maya2a_tf1;";
+		setParent ..;
+
+	// all
+	rowLayout -numberOfColumns 2 -cw2 140 80 -ct2 "right" "both" -co2 5 0;
+		text -label "export all";
+		checkBox -h 24 -l "" -v $maya2a_all -cc "$maya2a_all= #1";
+		setParent ..;
+
+	//separator -h 3 -st "none" -bgc 0.361 0.408 0.455;
+	separator -hr true -h 12 -st "single";
+
+	// attributes
+	rowLayout -numberOfColumns 2 -adj 2 -cw2 140 680 -ct2 "right" "both" -co2 5 0;
+		text -h 24 -label "attributes";
+		textField -h 24 -tx $maya2a_attr -cc "$maya2a_attr= `textField -q -fi maya2a_tf2`;" maya2a_tf2;
+		setParent ..;
+
+	//separator -h 3 -st "none" -bgc 0.361 0.408 0.455;
+	separator -hr true -h 12 -st "single";
+
+	// anim
+	rowLayout -numberOfColumns 2 -cw2 140 80 -ct2 "right" "both" -co2 5 0;
+		text -label "anim";
+		checkBox -h 24 -l "" -v $maya2a_anim -cc "$maya2a_anim= #1; rowLayout -e -en $maya2a_anim maya2a_gmf_se; rowLayout -e -en $maya2a_anim maya2a_gmf_s;";
+		setParent ..;
+
+	// start end
+	rowLayout -en $maya2a_anim -numberOfColumns 3 -cw3 140 80 80 -ct3 "right" "both" "both" -co3 5 0 0 maya2a_gmf_se;
+		text -label "start / end";
+		intField -h 24 -v $maya2a_as -cc "$maya2a_as= #1";
+		intField -h 24 -v $maya2a_ae -cc "$maya2a_ae= #1";
+		setParent ..;
+
+	// samples
+	rowLayout -en $maya2a_anim -numberOfColumns 2 -cw2 140 80 -ct2 "right" "both" -co2 5 0 maya2a_gmf_s;
+		text -label "samples";
+		intField -h 24 -v $maya2a_s -cc "$maya2a_s= #1";
+		setParent ..;
+
+	//separator -h 3 -st "none" -bgc 0.361 0.408 0.455;
+	separator -hr true -h 12 -st "single";
+
+	// gs
+	rowLayout -numberOfColumns 2 -cw2 140 80 -ct2 "right" "both" -co2 5 0;
+		text -label "separate geometries";
+		checkBox -h 24 -l "" -v $maya2a_gs -cc "$maya2a_gs= #1; rowLayout -e -en $maya2a_gs maya2a_gmf_rl;";
+		setParent ..;
+
+	// gmf
+	rowLayout -en $maya2a_gs -numberOfColumns 2 -cw2 140 80 -ct2 "right" "both" -co2 5 0 maya2a_gmf_rl;
+		text -label "multiple files";
+		checkBox -h 24 -l "" -v $maya2a_gmf -cc "$maya2a_gmf= #1";
+		setParent ..;
+
+	//separator -h 3 -st "none" -bgc 0.361 0.408 0.455;
+	separator -hr true -h 12 -st "single";
+
+	// cp
+	rowLayout -numberOfColumns 2 -cw2 140 80 -ct2 "right" "both" -co2 5 0;
+		text -label "create proxy";
+		checkBox -h 24 -l "" -v $maya2a_gmf -cc "$maya2a_cp= #1";
+		setParent ..;
+
+	//separator -h 3 -st "none" -bgc 0.361 0.408 0.455;
+	separator -hr true -h 12 -st "single";
+
+	// EXECUTE
+	button -h 24 -label "OK" -c ("setFocus maya2a_b1; arc_export($maya2a_prefix, $maya2a_all, $maya2a_attr, $maya2a_anim, $maya2a_as, $maya2a_ae, $maya2a_s, $maya2a_gs, $maya2a_gmf, $maya2a_cp);") maya2a_b1;
+
+	setParent ..;
+	setParent ..;
+
+	showWindow;
+}

@@ -1,0 +1,91 @@
+//  arc_systemCommand
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc int arc_systemCommand(string $command)
+{
+	print($command+"\n");
+
+	int $amount= 0;
+	progressWindow -title "Running command..." -progress $amount -isInterruptable false;
+
+	$pipe= popen($command, "r");
+
+	while( ! feof($pipe) )
+	{
+		//string $line= fgetline($pipe);
+		print( fgetline($pipe) );
+
+		$amount++; if($amount>=100) $amount= 0;
+		progressWindow -edit -progress $amount;
+	}
+
+	int $ret= pclose($pipe);
+
+	progressWindow -endProgress;
+
+	return $ret;
+}
+
+
+//  arc_readString
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc string arc_readString(string $fileName)
+{
+	string $str;
+
+	if($fileName!="")
+	{
+		int $fileId= fopen($fileName, "r");
+		$str= fread($fileId, $str);
+		fclose($fileId);
+	}
+
+	return $str;
+}
+
+
+//  arc_writeString
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc arc_writeString(string $fileName, string $str)
+{
+	if($fileName!="")
+	{
+		int $fileId= fopen($fileName, "w");
+		fwrite($fileId, substituteAllString($str, "\n", "\r\n"));
+		fclose($fileId);
+	}
+}
+
+
+//  arc_browseFile
+//  --------------------------------------------------------------------------------------------------------------------------------
+global proc string arc_browseFile(string $fileName, int $mode, string $filter)
+{
+	string $tmp= dirname($fileName);
+	if($tmp!="") $tmp+= "/";
+	$tmp+= $filter;
+
+	return fileDialog("-m", $mode, "-dm", $tmp);
+}
+
+
+//  Find the "Extra Attributes" frameLayout and hide it
+//  ================================================================================================================================
+global proc arc_suppressExtraNew()
+{
+	string $sExtraParent= `setParent ..`;
+	string $sa[]= `layout -q -ca $sExtraParent`;
+	string $sExtra;
+
+	for($sExtra in $sa)
+	{
+		if( (`objectTypeUI -isType frameLayout $sExtra`) && (`frameLayout -q -l $sExtra`=="Extra Attributes") )
+		{
+			frameLayout -e -manage 0 $sExtra;
+			break;
+		}
+	}
+}
+
+global proc arc_suppressExtraReplace()
+{
+}

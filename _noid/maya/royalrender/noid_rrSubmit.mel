@@ -1,0 +1,88 @@
+global proc noid_rrSubmit(int $removeImagePlane)
+{
+    string $originalPath = ` file -q -sceneName`;
+    if (`size($originalPath)` == 0 )
+    {
+        warning "Please save your scene before submitting!";
+    }
+    else
+    {
+        string $st = `date -format YYMMDDhhmmss`;
+
+        //get fullpath filename and extension
+        string $originalPath = ` file -q -sceneName`;
+        string $originalDir = `dirname ($originalPath)`;
+        string $originalName = `basenameEx ($originalPath)`;
+        string $originalExtension = `fileExtension($originalPath)`;
+
+    	//get ddm version by subfolder name
+    	string $buffer[];
+    	string $foo=`tokenize $originalDir "/" $buffer`;
+    	string $version=$buffer[size($buffer)-1];
+
+        //build RoyalRender subfolder path and filename with ddm version postfixed
+        string $rrpath = $originalDir + "/rr_" + $st + "/";
+        string $rrName = $rrpath + $originalName + "." + $originalExtension;
+
+        //create Royal Render subFolder
+        sysFile -makeDir $rrpath;
+
+        if ($removeImagePlane ==  1 )
+        {
+            warning "Removing imagePlanes";
+            //hide imagePlanes
+            string $sceneImagePlanes[] = `ls -type "imagePlane"`;
+            if (`size($sceneImagePlanes)` >= 1)
+            {
+                for ($currentImagePlane in $sceneImagePlanes)
+                {
+                    if (`attributeExists "initDisplayMode" $currentImagePlane`)
+                    {
+                        deleteAttr ($currentImagePlane + ".initDisplayMode");
+                    }
+                    int $imagePlaneType = `getAttr ($currentImagePlane + ".displayMode")`;
+                    addAttr -ln "initDisplayMode" -at long $currentImagePlane;
+                    setAttr ($currentImagePlane + ".initDisplayMode") $imagePlaneType;
+                    setAttr ($currentImagePlane + ".displayMode") 0;
+                }
+            }
+        }
+
+        //rename current file to RoyalRender path and file name and save it
+        file -rename $rrName ;
+        file -save;
+
+        //export alembic if xgen collections found
+		//python( "from cgev.maya.tools import batchTools; batchTools.copyPatches('"+$originalDir+"');" );
+
+        //call RR submitter, if ,not loaded, load it
+        string $rrloaded = `pluginInfo -q -loaded "rrSubmit_Maya_8.5+_NOID.py"`;
+        if ($rrloaded == 0)
+        {
+            loadPlugin "rrSubmit_Maya_8.5+_NOID.py";
+        }
+        rrSubmit;
+
+        if ($removeImagePlane ==  1 )
+        {
+            warning "Restore imagePlanes";
+            //restore imagePlanes
+            string $sceneImagePlanes[] = `ls -type "imagePlane"`;
+            if (`size($sceneImagePlanes)` >= 1)
+            {
+                for ($currentImagePlane in $sceneImagePlanes)
+                {
+                    int $imagePlaneInitType = `getAttr ($currentImagePlane + ".initDisplayMode")`;
+                    setAttr ($currentImagePlane + ".displayMode") $imagePlaneInitType;
+                    if (`attributeExists "initDisplayMode" $currentImagePlane`)
+                    {
+                        deleteAttr ($currentImagePlane + ".initDisplayMode");
+                    }
+                }
+            }
+        }
+        //rename to original path and save again
+        file -rename $originalPath;
+        file -save;
+    }
+}

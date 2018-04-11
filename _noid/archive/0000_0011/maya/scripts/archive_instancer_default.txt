@@ -1,0 +1,24 @@
+# base geometry
+# syntax: ' baseGeometry: <archive filename>, <archive first frame>, <archive last frame>, <geometry name> '
+baseGeometry:	d:/scene_tests/instBase/instParticles.a,
+				1, 100,
+				nParticleShape1;
+
+# attribute correspondance list
+# syntax: ' <attribute>: <attribute name> '
+# valid attributes: translateAttr, rotateAttr, scaleAttr, offsetAttr, typeIDAttr, actionIDAttr, rotateOrder, offsetSkip, transferAttrs
+translateAttr:	P;
+rotateAttr:		rot;
+scaleAttr:		radiusPP;
+offsetAttr:		offs;
+typeIDAttr:		tid;
+actionIDAttr:	aid;
+rotateOrder:	xyz;
+offsetStep:		1;
+transferAttrs:	rgbPP;
+
+# geometry correspondance list
+# syntax: ' geometry: <action count (n)>, n * < <archive filename>, <archive first frame>, <archive last frame> >'
+geometry:	3, D:/scene_tests/corbeau1/vol, 0, 0, D:/scene_tests/corbeau1/assis, 0, 0, D:/scene_tests/corbeau1/mort, 0, 0;
+geometry:	2, D:/scene_tests/corbeau2/vol, 0, 0, D:/scene_tests/corbeau2/mort, 0, 0;
+ 
