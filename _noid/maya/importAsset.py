@@ -1,4 +1,10 @@
-from PySide import QtCore, QtGui
+try:
+    from PySide2 import QtCore as core, QtGui as gui, QtWidgets as widgets
+except ImportError:
+    from PySide import QtCore as core, QtGui as gui
+    widgets= gui
+    core.QItemSelectionModel= gui.QItemSelectionModel
+    widgets.QHeaderView.setSectionResizeMode= widgets.QHeaderView.setResizeMode
 
 import noid_database as ndb
 import mayaUtils as mut
@@ -69,7 +75,7 @@ class importListView(listTable._listTable) :
 
 ''' _importWnd '''
 ''' ============================================================================================================================ '''
-class _importWnd(QtGui.QDialog) :
+class _importWnd(widgets.QDialog) :
     ''' __init__ '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def __init__(self, parent= mut.mainWindow()) :
@@ -95,7 +101,7 @@ class _importWnd(QtGui.QDialog) :
         self.resize(600, 600)
 
         ''' restore geometry '''
-        self.settings= QtCore.QSettings('noid', 'importWnd_maya')
+        self.settings= core.QSettings('noid', 'importWnd_maya')
         geometry= self.settings.value('geometry', '')
         self.restoreGeometry(geometry)
 
@@ -106,15 +112,15 @@ class _importWnd(QtGui.QDialog) :
     ''' setup_UI '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def setup_UI(self) :
-        self.m_mainL= QtGui.QVBoxLayout()
+        self.m_mainL= widgets.QVBoxLayout()
 
         ''' top menus '''
-        self.m_topL= QtGui.QHBoxLayout()
-        self.m_projectsM= QtGui.QComboBox()
+        self.m_topL= widgets.QHBoxLayout()
+        self.m_projectsM= widgets.QComboBox()
         self.m_projectsM.currentIndexChanged.connect(self.projectsM_onChange)
-        self.m_jobsM= QtGui.QComboBox()
+        self.m_jobsM= widgets.QComboBox()
         self.m_jobsM.currentIndexChanged.connect(self.jobsM_onChange)
-        self.m_taskTypesM= QtGui.QComboBox()
+        self.m_taskTypesM= widgets.QComboBox()
         self.m_taskTypesM.currentIndexChanged.connect(self.taskTypesM_onChange)
 
         ''' m_table '''
@@ -124,7 +130,7 @@ class _importWnd(QtGui.QDialog) :
         self.m_infoTable= infoTable._infoTable(["Project", "Job", "Task", "Task Version", "Type", "Version", "Date"])
 
         ''' ok button '''
-        self.m_okB= QtGui.QPushButton("OK")
+        self.m_okB= widgets.QPushButton("OK")
         self.m_okB.clicked.connect(self.ok_onClick)
 
         ''' add the widgets to the main layout '''

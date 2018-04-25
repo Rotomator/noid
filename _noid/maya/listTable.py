@@ -1,36 +1,42 @@
-from PySide import QtCore, QtGui
+try:
+    from PySide2 import QtCore as core, QtGui as gui, QtWidgets as widgets
+except ImportError:
+    from PySide import QtCore as core, QtGui as gui
+    widgets= gui
+    core.QItemSelectionModel= gui.QItemSelectionModel
+    widgets.QHeaderView.setSectionResizeMode= widgets.QHeaderView.setResizeMode
 
 
 ''' _listTable_model '''
 ''' ============================================================================================================================ '''
-class _listTable_model(QtCore.QAbstractTableModel) :
+class _listTable_model(core.QAbstractTableModel) :
     ''' __init__ '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def __init__(self, table, headers, parent= None, *args) :
         self.m_table= table
         self.m_headers= headers
 
-        QtCore.QAbstractTableModel.__init__(self, parent, *args)
+        core.QAbstractTableModel.__init__(self, parent, *args)
 
     ''' columnCount, rowCount '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
-    def columnCount(self, parent= QtCore.QModelIndex()) : return len(self.m_headers)
-    def rowCount(self, parent= QtCore.QModelIndex()) : return self.m_table.rowCount()
+    def columnCount(self, parent= core.QModelIndex()) : return len(self.m_headers)
+    def rowCount(self, parent= core.QModelIndex()) : return self.m_table.rowCount()
 
     ''' data '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def data(self, index, role) :
         if index.isValid() :
-            if role == QtCore.Qt.ForegroundRole : return self.m_table.fgColor(index.column(), index.row())
-            elif role == QtCore.Qt.BackgroundRole : return self.m_table.bgColor(index.column(), index.row())
-            elif role == QtCore.Qt.DisplayRole : return self.m_table.data(index.column(), index.row())
+            if role == core.Qt.ForegroundRole : return self.m_table.fgColor(index.column(), index.row())
+            elif role == core.Qt.BackgroundRole : return self.m_table.bgColor(index.column(), index.row())
+            elif role == core.Qt.DisplayRole : return self.m_table.data(index.column(), index.row())
 
         return None
 
     ''' headerData '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
-    def headerData(self, section, orientation, role= QtCore.Qt.DisplayRole) :
-        if role == QtCore.Qt.DisplayRole and orientation == QtCore.Qt.Horizontal :
+    def headerData(self, section, orientation, role= core.Qt.DisplayRole) :
+        if role == core.Qt.DisplayRole and orientation == core.Qt.Horizontal :
             return self.m_headers[section]
 
         return None
@@ -38,47 +44,49 @@ class _listTable_model(QtCore.QAbstractTableModel) :
 
 ''' _listTable '''
 ''' ============================================================================================================================ '''
-class _listTable(QtGui.QTableView) :
+class _listTable(widgets.QTableView) :
     ''' __init__ '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def __init__(self, headers, parent= None) :
         self.m_model= _listTable_model(self, headers)
 
         ''' create table '''
-        QtGui.QTableView.__init__(self, parent)
+        widgets.QTableView.__init__(self, parent)
         self.setModel(self.m_model)
-        self.setFrameStyle(QtGui.QFrame.NoFrame)
+        self.setFrameStyle(widgets.QFrame.NoFrame)
         self.setShowGrid(False)
-        self.setFocusPolicy(QtCore.Qt.NoFocus)
-        self.setEditTriggers(QtGui.QAbstractItemView.NoEditTriggers)
-        self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
-        self.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
+        self.setFocusPolicy(core.Qt.NoFocus)
+        self.setEditTriggers(widgets.QAbstractItemView.NoEditTriggers)
+        self.setSelectionBehavior(widgets.QAbstractItemView.SelectRows)
+        self.setSelectionMode(widgets.QAbstractItemView.SingleSelection)
 
         ''' rows size '''
         header= self.verticalHeader()
         header.setVisible(False)
-        header.setResizeMode(QtGui.QHeaderView.Fixed)
+        header.setSectionResizeMode(widgets.QHeaderView.Fixed)
         header.setDefaultSectionSize(24)
 
         ''' columns size '''
         header= self.horizontalHeader()
         for i in range(0, self.m_model.columnCount()) :
-            header.setResizeMode(i, QtGui.QHeaderView.Stretch)
+            header.setSectionResizeMode(i, widgets.QHeaderView.Stretch)
 
     ''' setFixed '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
-    def setFixed(self, columnIdx) : self.horizontalHeader().setResizeMode(columnIdx, QtGui.QHeaderView.Fixed)
+    def setFixed(self, columnIdx) : self.horizontalHeader().setSectionResizeMode(columnIdx, widgets.QHeaderView.Fixed)
 
     ''' setWidth '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def setWidth(self, columnIdx, width) :
-        self.horizontalHeader().setResizeMode(columnIdx, QtGui.QHeaderView.Fixed)
+        self.horizontalHeader().setSectionResizeMode(columnIdx, widgets.QHeaderView.Fixed)
         self.setColumnWidth(columnIdx, width)
 
     ''' update '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def update(self) :
-        self.m_model.reset()
+        #self.m_model.reset()
+        self.m_model.beginResetModel()
+        self.m_model.endResetModel()
 
     ''' columnCount, rowCount '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''

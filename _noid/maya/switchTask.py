@@ -1,4 +1,11 @@
-from PySide import QtCore, QtGui
+try:
+    from PySide2 import QtCore as core, QtGui as gui, QtWidgets as widgets
+except ImportError:
+    from PySide import QtCore as core, QtGui as gui
+    widgets= gui
+    core.QItemSelectionModel= gui.QItemSelectionModel
+    widgets.QHeaderView.setSectionResizeMode= widgets.QHeaderView.setResizeMode
+
 import maya.OpenMaya as om
 
 import noid_database as ndb
@@ -118,7 +125,7 @@ class jobListView(listTable._listTable) :
 ''' taskListView '''
 ''' ============================================================================================================================ '''
 class taskListView(listTable._listTable) :
-    m_stateColors= [QtGui.QColor(232, 17, 35), QtGui.QColor(255, 140, 0), QtGui.QColor(0, 140, 251), QtGui.QColor(29, 221, 29)]
+    m_stateColors= [gui.QColor(232, 17, 35), gui.QColor(255, 140, 0), gui.QColor(0, 140, 251), gui.QColor(29, 221, 29)]
 
     ''' __init__ '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
@@ -189,7 +196,7 @@ class taskListView(listTable._listTable) :
 
 ''' _switchTaskWnd '''
 ''' ============================================================================================================================ '''
-class _switchTaskWnd(QtGui.QDialog) :
+class _switchTaskWnd(widgets.QDialog) :
     ''' __init__ '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def __init__(self, parent= mut.mainWindow()) :
@@ -208,7 +215,7 @@ class _switchTaskWnd(QtGui.QDialog) :
         self.resize(600, 600)
 
         ''' restore geometry '''
-        self.settings= QtCore.QSettings('noid', 'switchTaskWnd_maya')
+        self.settings= core.QSettings('noid', 'switchTaskWnd_maya')
         geometry= self.settings.value('geometry', '')
         self.restoreGeometry(geometry)
 
@@ -218,14 +225,14 @@ class _switchTaskWnd(QtGui.QDialog) :
     ''' setup_UI '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def setup_UI(self) :
-        self.mainLayout= QtGui.QVBoxLayout()
+        self.mainLayout= widgets.QVBoxLayout()
 
         ''' options '''
-        self.m_showMyTasksCB= QtGui.QCheckBox("Show my tasks only")
+        self.m_showMyTasksCB= widgets.QCheckBox("Show my tasks only")
         self.m_showMyTasksCB.stateChanged.connect(self.showEveryTasksCB_onClick)
 
         ''' task table '''
-        self.hLayout= QtGui.QHBoxLayout()
+        self.hLayout= widgets.QHBoxLayout()
         self.m_projectList= projectListView()
         selection= self.m_projectList.selectionModel()
         selection.selectionChanged.connect(self.projectList_selectionChanged)
@@ -237,7 +244,7 @@ class _switchTaskWnd(QtGui.QDialog) :
         #selection.selectionChanged.connect(self.table_onSelect)
 
         ''' ok button '''
-        self.okButton= QtGui.QPushButton("OK")
+        self.okButton= widgets.QPushButton("OK")
         self.okButton.clicked.connect(self.ok_onClick)
 
         ''' add the widgets to the main layout '''
@@ -381,7 +388,7 @@ class _switchTaskWnd(QtGui.QDialog) :
                 else : self.m_projectId= 0
 
             if self.m_projectId :
-                self.m_projectList.selectionModel().select(self.m_projectList.model().index(idx, 0), QtGui.QItemSelectionModel.Select);
+                self.m_projectList.selectionModel().select(self.m_projectList.model().index(idx, 0), core.QItemSelectionModel.Select);
 
         ''' validate m_jobList '''
         if not self.m_jobList_valid :
@@ -392,7 +399,7 @@ class _switchTaskWnd(QtGui.QDialog) :
             idx= ndb.rows_valueIndex(self.m_jobList.m_rows, 0, self.m_jobId)    # compute m_jobId index in m_jobList
             if idx < 0 : self.m_jobId= 0                                        # if index < 0 : m_jobId= 0
 
-            self.m_jobList.selectionModel().select(self.m_jobList.model().index(idx+1, 0), QtGui.QItemSelectionModel.Select);
+            self.m_jobList.selectionModel().select(self.m_jobList.model().index(idx+1, 0), core.QItemSelectionModel.Select);
 
         ''' validate m_taskList '''
         if not self.m_taskList_valid :

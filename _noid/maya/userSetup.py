@@ -39,6 +39,8 @@ VRAY_VERSION= os.getenv("VRAY_VERSION")
 ARCHIVE_VERSION= os.getenv("ARCHIVE_VERSION")
 
 noid_setEnvs([
+    'NOID_HOST'                                     , 'localhost',
+
 	'ARCHIVE_PATH'					                , '%NOID_PATH%/archive/'+ARCHIVE_VERSION,
 
 	'+VRAY_FOR_MAYA'+MAYA_VERSION+'_MAIN_x64'	    , '%NOID_BIN_PATH%/vray/'+VRAY_VERSION+'/maya'+MAYA_VERSION+'/maya_vray',

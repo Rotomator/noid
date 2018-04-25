@@ -1,4 +1,10 @@
-from PySide import QtCore, QtGui
+try:
+    from PySide2 import QtCore as core, QtGui as gui, QtWidgets as widgets
+except ImportError:
+    from PySide import QtCore as core, QtGui as gui
+    widgets= gui
+    core.QItemSelectionModel= gui.QItemSelectionModel
+    widgets.QHeaderView.setSectionResizeMode= widgets.QHeaderView.setResizeMode
 
 import noid_utils as nut
 import noid_database as ndb
@@ -67,7 +73,7 @@ class publishListView(listTable._listTable) :
 
 ''' _publishWnd '''
 ''' ============================================================================================================================ '''
-class _publishWnd(QtGui.QDialog) :
+class _publishWnd(widgets.QDialog) :
     ''' __init__ '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def __init__(self, parent= mut.mainWindow()) :
@@ -78,7 +84,7 @@ class _publishWnd(QtGui.QDialog) :
         self.resize(600, 600)
 
         ''' restore geometry '''
-        self.settings= QtCore.QSettings('noid', 'publishWnd_maya')
+        self.settings= core.QSettings('noid', 'publishWnd_maya')
         geometry= self.settings.value('geometry', '')
         self.restoreGeometry(geometry)
 
@@ -90,32 +96,32 @@ class _publishWnd(QtGui.QDialog) :
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
     def setup_UI(self) :
         ''' make a vertical box layout and set it's parent to the central widget '''
-        self.mainLayout= QtGui.QVBoxLayout()
-        self.hl1= QtGui.QHBoxLayout()
-        self.vl1= QtGui.QVBoxLayout()
-        self.vl1.setAlignment(QtCore.Qt.AlignTop)
-        self.vl2= QtGui.QVBoxLayout()
-        self.vl2.setAlignment(QtCore.Qt.AlignTop)
+        self.mainLayout= widgets.QVBoxLayout()
+        self.hl1= widgets.QHBoxLayout()
+        self.vl1= widgets.QVBoxLayout()
+        self.vl1.setAlignment(core.Qt.AlignTop)
+        self.vl2= widgets.QVBoxLayout()
+        self.vl2.setAlignment(core.Qt.AlignTop)
 
-        #self.r0= QtGui.QRadioButton("All")
+        #self.r0= gui.QRadioButton("All")
         #self.r0.setChecked(True)
-        self.r0= QtGui.QRadioButton("All sets")
+        self.r0= widgets.QRadioButton("All sets")
         self.r0.setChecked(True)
-        self.r1= QtGui.QRadioButton("Selected sets")
+        self.r1= widgets.QRadioButton("Selected sets")
 
-        self.c0= QtGui.QCheckBox("Maya Scene")
+        self.c0= widgets.QCheckBox("Maya Scene")
         self.c0.setChecked(True)
-        self.c1= QtGui.QCheckBox("Alembic")
-        self.c2= QtGui.QCheckBox("FBX")
-        self.c3= QtGui.QCheckBox("OBJ")
-        self.c4= QtGui.QCheckBox("Archive")
+        self.c1= widgets.QCheckBox("Alembic")
+        self.c2= widgets.QCheckBox("FBX")
+        self.c3= widgets.QCheckBox("OBJ")
+        self.c4= widgets.QCheckBox("Archive")
 
         ''' table '''
         self.table= publishListView()
 
 
         ''' ok button '''
-        self.okButton= QtGui.QPushButton("OK")
+        self.okButton= widgets.QPushButton("OK")
         self.okButton.clicked.connect(self.ok_onClick)
 
         ''' add widgets to the main layout '''

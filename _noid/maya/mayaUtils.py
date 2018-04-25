@@ -1,5 +1,16 @@
-from PySide import QtGui
-from shiboken import wrapInstance
+try:
+    from PySide2 import QtCore as core, QtGui as gui, QtWidgets as widgets
+except ImportError:
+    from PySide import QtCore as core, QtGui as gui
+    widgets= gui
+    core.QItemSelectionModel= gui.QItemSelectionModel
+    widgets.QHeaderView.setSectionResizeMode= widgets.QHeaderView.setResizeMode
+
+try:
+    from shiboken2 import wrapInstance
+except ImportError:
+    from shiboken import wrapInstance
+
 import os
 import maya.OpenMayaUI as omui
 import maya.cmds as cmds
@@ -12,7 +23,7 @@ import noid_utils as nut
 ''' -----------------------------------------------------------------------------------------------------------------------------'''
 def mainWindow() :
     ptr= omui.MQtUtil.mainWindow()
-    return wrapInstance(long(ptr), QtGui.QWidget)
+    return wrapInstance(long(ptr), widgets.QWidget)
 
 
 ''' createProject '''
