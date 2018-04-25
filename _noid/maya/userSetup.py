@@ -42,7 +42,7 @@ sys.path.append(noid_path('%NOID_PATH%/pythonModules'))
 noid_setEnvs([
 	'MAYA_VERSION'					    , '2016',
 	'VRAY_VERSION'					    , '35201',
-	'ARCHIVE_VERSION'				    , '0000_0011',
+	'ARCHIVE_VERSION'				    , '0000_0013',
 
 	'ARCHIVE_PATH'					    , '%NOID_PATH%/archive/%ARCHIVE_VERSION%',
 
