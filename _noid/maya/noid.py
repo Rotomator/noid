@@ -7,11 +7,6 @@ import publish
 import maya.cmds as cmds
 
 
-''' find user
-    ---------------------------------------------------------------------------------------------------------------------------- '''
-ndb.findUser()
-
-
 ''' create windows
     ---------------------------------------------------------------------------------------------------------------------------- '''
 switchTaskWnd= switchTask._switchTaskWnd()
@@ -33,3 +28,8 @@ cmds.menuItem(divider= True)
 cmds.menuItem(label= 'Import', command= 'noid.importWnd.show()')
 cmds.menuItem(divider= True)
 cmds.menuItem(label= 'Submit To RoyalRender', command= 'mel.eval("noid_rrSubmit(1);")')
+
+
+''' find user
+    ---------------------------------------------------------------------------------------------------------------------------- '''
+ndb.findUser()
