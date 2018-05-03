@@ -7,7 +7,7 @@ import maya.cmds as cmds
 import maya.mel as mel
 
 
-''' noid_path
+''' noid_path pouet!
     ---------------------------------------------------------------------------------------------------------------------------- '''
 def noid_path(path) :
     return os.path.expandvars(path).replace('\\', '/')
