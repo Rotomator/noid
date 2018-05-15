@@ -66,6 +66,7 @@ noid_setEnvs([
     ---------------------------------------------------------------------------------------------------------------------------- '''
 sys.path.append(noid_path('%NOID_PATH%/pythonModules'))
 sys.path.append(noid_path('%NOID_BIN_PATH%/vray/'+VRAY_VERSION+'/maya'+MAYA_VERSION+'/maya_vray/scripts'))
+sys.path.append(noid_path('%NOID_PATH%/maya/tools'))
 
 
 ''' royalRender
