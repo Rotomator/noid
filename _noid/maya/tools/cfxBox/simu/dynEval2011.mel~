@@ -1,0 +1,975 @@
+//=============================================================================
+//
+//	Dynamic Interface
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.6
+//
+// Created  :    23/11/2010
+// Modified :    24/11/2010
+//
+// Creator 	:    uu
+//
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "DynEval" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+global proc dynamicEval()
+{
+  
+       string $wndName = "dynamicEvaluationsWindow";
+		string $reduceFilter;
+		string $chars[] =`ls "*:dynRigAll"`;
+        
+        // if window exists
+        if (`window -ex $wndName`){
+                deleteUI $wndName;      // kill it
+		}
+		
+        window 		-width 		215
+							-toolbox	true
+							-sizeable	false
+							 $wndName;
+        
+							 string $form = `formLayout -numberOfDivisions 100`;
+
+
+     string $main=`   columnLayout -adj 0 mainLayout` ;
+                                          		   
+            			
+            		   optionMenu -label "Filters" -changeCommand ("addObjects(\"" + "#1" + "\")") menuTsl;
+            				menuItem -label "none";
+							
+            					  for($curent in $chars)
+            					  {
+									  	string $reduceFilter = `substitute ":dynRigAll" $curent ""`;           		 
+										menuItem -label $reduceFilter ;
+								  }
+     setParent..;
+                
+		        string $column =` rowColumnLayout -nr 1 `;		
+		
+        		
+
+						textScrollList  -ams 1 -dcc "backspace(0)"  -sc "nucleusblClk" nucleusObjTSL ;
+							popupMenu;
+							menuItem -l "attribute" -c "launchAtt(0)";   
+									 
+		
+							textScrollList  -ams 1  -dcc "backspace(1)" -sc 	"selCurrent(1)" clothObjTSL;
+								popupMenu;
+								menuItem -l "attribute" -c "launchAtt(1)";            
+								menuItem- l "show" -c  "visNC(1)"; 
+								menuItem -l "hide" -c "visNC(0)";
+                    
+               setParent..;
+
+               string $columnHide =` rowColumnLayout -vis 0 -nr 1 hideTsl`;		
+   
+						textScrollList -dcc "backspace( 2)"  -sc "selCurrent(2)" rigidObjTSL;
+							popupMenu;
+							menuItem -l "attribute" -c "launchAtt(2)";   
+							
+              setParent..;
+
+               string $Bck_all =`columnLayout `;
+                         
+						text -l "Enable/Disable";
+						
+						button -l "Enable All" -c "setAllDynamics(1)" -w 100;
+						button -l "Disable All" -c "setAllDynamics(0)" -w 100;							   
+						button -l "Refresh" -c "dynamicEvalRefreshListall()" -w 100;
+											   
+						checkBox -l "nucleus" -v 1 nucleusCB;       
+						checkBox -l "nCloth" -v 1  clothCB;
+						checkBox -l "nRigid" -v 0  rigidsCB;
+						checkBox -l "nConstraint" -v 0  constraintCB;
+						separator -h 5  -st "none";
+						text -l "Select in Outliner";
+						separator -h 2 -st "none";
+						checkBox -l "SelectNode" -v 0  selCB;
+											  
+               setParent..;
+
+           
+        string $attach=`columnLayout -adj 1`;        
+               
+        	      separator -h 5 -st "none";
+                 button -l "Enable Selected" -c "setSelDynamics(1)" -w 150;
+                 separator -h 5 -st "none";
+        	      button -l "Create cache" -c "createCache(1)" -w 150;
+        	      separator -h 5 -st "none";
+        	      button -l "Assign cache" -c "attCache()"-w 150; 
+
+				  
+			setParent..;
+        
+		
+			string $del=`columnLayout -adj 1`;        
+        
+                  separator -h 5 -st "none";
+				   	button -l "Disable Selected" -c "setSelDynamics(0)"-w 150;
+                  separator -h 5 -st "none";
+                  button -l "Delete cache" -c "createCache(0)"-w 150; 
+                  separator -h 5 -st "none";
+                  button -l "Assign All Caches" -c "attAllCache()"-w 150;                   
+                     
+        setParent..;
+        
+			string $blend=`columnLayout -adj 1 `;								
+
+				text    -align "left" -label "show/set start Frame";  
+				
+				separator -h 5 -st  "single";					
+					intFieldGrp  -numberOfFields 1  -enable 1 -v1 0 									
+												-cw 1 30
+												-cal 1 "left" 
+												-cw 2 50
+												-l"Start"
+												-cc "setStart" startTsl ;
+			   				
+				separator -h 5 -st  "none";
+				button -l  "Set InitMesh from Mesh" -c "setFormMesh";
+				
+					text -align "left"  -label "show/hide nRigid panel";      
+
+				separator -h 5 -st  "single";
+				separator -h 3 -st  "none";
+				
+					checkBox -l "nRidi/Cts" -v 0  
+										-onc "closePanel" 
+										-ofc "closePanel" rigidOff;   
+
+				
+			setParent..;
+
+			string $back=`columnLayout -adj 1`;     
+			
+					separator -height 10 -style "double";
+					text -label "V2";   
+			
+			setParent..;
+
+       formLayout -edit
+       
+    -attachForm     $main "top"  5
+    -attachPosition $main "left"  5 0
+    -attachForm     $main "left"  5
+
+    -attachForm     $column "top"    30
+    -attachPosition $column "left"  5 0
+    -attachForm     $column "left"  5
+    
+    -attachControl $columnHide	"left"    0 $column
+    -attachForm     $columnHide "top"    30
+
+    
+    -attachForm     $main	"left"    5
+	-attachForm     $main	"right"   5
+	-attachForm 	$main	"bottom"  5
+	
+	-attachControl $Bck_all	"left"    5 $columnHide
+	-attachForm     $Bck_all "top"    25
+	-attachForm     $Bck_all	"left"    5
+	-attachForm     $Bck_all	"right"   5
+		
+    -attachControl $attach	"top"    5 $column
+    -attachForm     $attach	"left"    5
+
+    -attachControl $del	"left"    5 $attach
+    -attachControl $del	"top"    5 $column
+    -attachForm     $del	"left"    5
+    
+    -attachControl $blend	"left"    20 $del
+    -attachControl $blend	"top"    5 $column
+	-attachForm $blend    "right"    100
+    
+	-attachForm $back    "bottom"    10
+	-attachForm $back    "left"    5 
+	-attachForm $back    "right"    5
+
+$form;
+                                            
+
+        dynamicEvalRefreshListall();
+                
+        showWindow $wndName;
+}
+
+global proc setFormMesh()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	
+
+	
+	/*
+	process
+	-----------------------------------------------------*/	
+			string $sourceMesh[]=`ls -sl`;
+			
+					if(`size($sourceMesh)`<2)
+					{
+						string $curent[]=`textScrollList -q -si clothObjTSL`;
+						string $realitem=`substitute "^[^.]*\\." $curent[0] ""`;       
+						print ($realitem);
+						select -r $sourceMesh[0] $realitem;
+						SetNClothStartFromMesh;
+					}
+					else
+					{
+						SetNClothStartFromMesh;
+					}
+
+	
+	/*
+	retours
+	-----------------------------------------------------*/
+	
+	if ($mgDebug)
+	{
+		print ("\n######\nScript : \n\n");
+		
+		print ("\n######\n");
+	}	
+	
+	/*
+	*/	
+}
+
+global proc selCurrent(int $value)
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+
+	string $list[]={"nucleusObjTSL",  "clothObjTSL" , "rigidObjTSL"};
+	/*
+	process
+	-----------------------------------------------------*/	
+		 if (`checkBox -q -v selCB`)
+		 {
+			 
+			 string $curent[]=`textScrollList -q -si $list[$value]`;
+			 
+			 select -cl;
+			 
+				for ($obj in $curent)
+				{
+					string $realitem=`substitute "^[^.]*\\." $obj ""`;       
+					select -add $realitem;
+				}
+	 
+		 }
+	
+	/*
+	retours
+	-----------------------------------------------------*/
+	
+	if ($mgDebug)
+	{
+		print ("\n######\nScript : \n\n");
+		
+		print ("\n######\n");
+	}	
+	
+	/*
+	*/	
+}
+
+global proc setStart()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	
+string $item[];
+string $clean;
+int $startNew;
+	
+	/*
+	process
+	-----------------------------------------------------*/	
+		$startNew=`intFieldGrp -q -v1 startTsl`;
+       $item = `textScrollList -q -si nucleusObjTSL`;
+	   
+	   for ($nuc in $item )
+	   {
+			$clean=`substitute "^[^.]*\\." $nuc ""`;
+			print ($clean +"\n");
+			setAttr ($clean+".startFrame") $startNew;	   
+	   }
+
+	/*
+	retours
+	-----------------------------------------------------*/
+	
+	if ($mgDebug)
+	{
+		print ("\n######\nScript : \n\n");
+		
+		print ("\n######\n");
+	}	
+	
+	/*
+	*/	
+}
+global proc closePanel()
+{
+		 if (`checkBox -q -v rigidOff`)
+		{        			
+				rowColumnLayout -e -vis 1 hideTsl;
+		}
+		
+		 else
+		{        				
+				rowColumnLayout -e -vis 0 hideTsl;
+		}
+}
+
+
+
+global proc attCache()
+{
+
+		string $listAtt[] =`textScrollList -q -si clothObjTSL`;
+
+		print $listAtt;
+		select -cl;
+		
+		for ($cloth in $listAtt)
+		{
+				string $removeName = `substitute "^[^.]*\\." $cloth "" `;
+				select -add $removeName;		
+		}
+		
+		attachCache;
+}
+
+
+
+global proc attAllCache()
+{
+	
+		string $listAtt[] =`textScrollList -q -si clothObjTSL`;
+		
+			for($obj in $listAtt )
+			{
+				string $removeName = `substitute "^[^.]*\\." $obj "" `;
+				select -r $removeName;
+				
+				ClearAllCache($removeName);
+				
+				print ("//----------------------------------------------------------------------------------- \n");
+				print("//---- All Cache Delete \n");
+				print("//-----------------------------------------------------------------------------------\n");
+					
+				findLastCache($removeName);
+				
+			}
+}
+
+
+
+global proc launchAtt(int $mode)
+{
+		string $listAtt[];
+		if($mode==0)
+		{
+			   string $listAtt[] =`textScrollList -q -si nucleusObjTSL`;
+				print $listAtt[0];
+				string $removeName = `substitute "^[^.]*\\." $listAtt[0] "" `;
+				select -r $removeName;
+				
+					if(`isAttributeEditorRaised`<1)	
+							ToggleAttributeEditor;
+		}
+		
+		 if($mode==1)
+		 {
+			  	string $listAtt[] =`textScrollList -q -si clothObjTSL`;
+				print $listAtt[0];
+				string $removeName = `substitute "^[^.]*\\." $listAtt[0] "" `;
+				select -r $removeName;
+				
+						if(`isAttributeEditorRaised`<1)
+						ToggleAttributeEditor;
+		}
+		
+		if($mode==2)
+		{
+			   string $listAtt[] =`textScrollList -q -si rigidObjTSL`;
+				print $listAtt[0];
+				string $removeName = `substitute "^[^.]*\\." $listAtt[0] "" `;
+				select -r $removeName;
+				
+						if(`isAttributeEditorRaised`<1)
+						ToggleAttributeEditor;
+		}
+}
+
+
+global proc visNC(int $vis)
+{
+		string $listAtt[] =`textScrollList -q -si clothObjTSL`;
+		string $removeName = `substitute "^[^.]*\\." $listAtt[0] "" `;
+		string $recupCo=`substitute "_nCloth" $removeName "_nMesh"`;
+			
+			if ($vis==0)
+			{
+						setAttr ($recupCo + ".visibility") 0;
+	
+			}
+			else 
+			{
+						showHidden -a  $recupCo;
+			}
+}
+
+
+
+global proc dynamicEvalRefreshListall()
+{
+        // take all the items out of the textScrollList
+        textScrollList -e -ra nucleusObjTSL;
+        textScrollList -e -ra clothObjTSL;
+        textScrollList -e -ra rigidObjTSL;
+		string $reset=`optionMenu -e -sl 1 menuTsl`;
+		string $filtre=`optionMenu -q -value menuTsl`;
+        addObjects($filtre);
+}
+
+
+global proc dynamicEvalRefreshList()
+{
+        // take all the items out of the textScrollList
+        
+      
+		string $filtre=`optionMenu -q -value menuTsl`;
+        string $itemcloth[] = `textScrollList -q -ai clothObjTSL`;              
+        string $itemrigid[] = `textScrollList -q -ai rigidObjTSL`;   
+        int $objState;        
+        int $i;
+        int $size=`size($itemcloth)`;
+        int $sizeR=`size($itemrigid)`;       
+		
+				if ($size>0)
+				{
+						textScrollList -e -ra clothObjTSL;
+				}
+				
+				if($sizeR>0)
+				{
+						textScrollList -e -ra rigidObjTSL;
+				}
+        
+        textScrollList -e -ra nucleusObjTSL;
+        addObjects($filtre);
+                       
+             for($i=0;$i<$size;$i++)
+			 {
+               string $realitemcloth=`substitute "^[^.]*\\." $itemcloth[$i] ""`;            
+                $objState = getObjState($realitemcloth);
+               
+						if ($objState)
+								 textScrollList -e -a ("  ON    ." + $realitemcloth) clothObjTSL;
+								 
+					   else
+					 
+								 textScrollList -e -a ("off    ." + $realitemcloth) clothObjTSL;                                                                                         
+                }
+             
+              
+              for($i=0;$i<$sizeR;$i++)
+			  {
+				  string $realitemrigid=`substitute "^[^.]*\\." $itemrigid[$i] ""`;                        
+                $objState = getObjState($realitemrigid);
+				
+						if ($objState)
+								 textScrollList -e -a ("  ON    ." + $realitemrigid) rigidObjTSL;
+								 
+					   else
+					 
+								 textScrollList -e -a ("off   ." + $realitemrigid) rigidObjTSL;
+                        
+                }                        
+}            
+
+
+
+global proc string[] listNuc(string $listFilter)
+{
+	
+	string $listNUC[];
+
+		if(!`size($listFilter)`)
+		{
+			string $objList[] = `ls -fl -typ nCloth -dag`; // returns shape node names
+			
+				for($obj in $objList )
+				{
+				   string $selNuc[]=`listConnections -d on -s off -t nucleus $obj`;
+				  appendStringArray($listNUC, $selNuc, 1);
+				} 
+		}
+		
+		else
+		{
+			string $objList[] = `ls -fl -typ nCloth -dag $listFilter `; // returns shape node names			
+			string $firstParent=firstParentOf( $objList[0]);
+			string $Suff=`substitute "|" $firstParent ""`;
+			string $finalFilter = `match "^[^\|]*" $Suff `;					
+			string $objList[]=` ls -fl -typ nCloth -ni -dag $finalFilter`;
+			
+				for($obj in $objList )
+				{
+				   string $selNuc[]=`listConnections -d on -s off -t nucleus $obj`;
+				  appendStringArray($listNUC, $selNuc, 1);
+				}
+		}
+	
+    return $listNUC;
+}
+
+
+
+// Adds objects into the textScrollList.
+global proc addObjects(string $fliter)
+{
+	
+		string $transform;               
+		int $objState;
+		
+        textScrollList -e -ra nucleusObjTSL;
+        textScrollList -e -ra clothObjTSL;
+        textScrollList -e -ra rigidObjTSL;
+        // get a list of the object type in the scene
+		
+				if(`gmatch "none" $fliter`)
+				{
+						$fliter="";
+				}
+		
+				if(!`size($fliter)`)
+				{
+				
+					  string $objList[] = `listNuc("")`; // returns shape node names
+					  string $shorterList[] = stringArrayRemoveDuplicates($objList);  
+				
+						
+				
+						for ($current in $shorterList)
+						{		
+				
+								$transform = `listRelatives -p $current`;
+				
+								if (size($transform) == 0 || $fliter == "rigidBody")
+										$transform = $current;
+				
+								$objState = getObjState($transform);
+				
+								// if the object is disabled then put an asterisk in front of its name
+								if ($objState)
+										textScrollList -e -a ("  ON    ." + $transform) nucleusObjTSL;
+										 
+							   else             
+										textScrollList -e -a ("off   ." + $transform) nucleusObjTSL;   
+									
+
+
+						}
+				}
+				
+				else
+				{
+					 
+					string $objList[] = `listNuc($fliter +":*")`; // returns shape node names
+					 
+
+
+					string $shorterList[] = stringArrayRemoveDuplicates($objList);  
+				
+				
+						for ($current in $shorterList)
+						{
+				
+								$transform = `listRelatives -p $current`;
+				
+									if (size($transform) == 0 || $fliter == "rigidBody")
+											$transform = $current;
+					
+									$objState = getObjState($transform);
+					
+									// if the object is disabled then put an asterisk in front of its name
+									if ($objState)
+											textScrollList -e -a ("  ON    ." + $transform) nucleusObjTSL;
+											 
+								   else             
+											textScrollList -e -a ("off   ." + $transform) nucleusObjTSL;                    
+						}
+				}
+}
+
+        
+// returns 1 if the object is turned on, 0 if it's turned off
+global proc int getObjState(string $objTransform)
+{
+        int $objState;
+        string $objShape[] = `listRelatives -s $objTransform`;  // holds the shape node name
+        string $objType; // holds what kind of object it is
+
+        // find out what kind of object it is
+        if (size($objShape) > 0)
+                $objType = `nodeType $objShape[0]`;
+        else
+                $objType = `nodeType $objTransform`;
+
+        switch ($objType)
+        {
+                case "nCloth":
+                        $objState = `getAttr ($objShape[0] + ".isDynamic")`;
+                break;
+                
+                case "nRigid":
+                        $objState = `getAttr ($objShape[0] + ".isDynamic")`;
+                break;
+                  
+                case "dynamicConstraint":
+                        $objState = `getAttr ($objTransform + ".enable")`;              
+                break;            
+
+                case "nucleus":
+                        $objState = `getAttr ($objTransform + ".enable")`;
+                break;
+
+        }
+        
+        return $objState;
+}
+
+
+ global proc nucleusblClk()
+{
+	selCurrent(0);
+        // get the name of the item that was double clicked
+        string $transform[];
+        string $transformRigid[];       
+        int $objState;
+		 int $i;
+		 string $clean;
+		 int $startFrame;
+		 string $item[];
+        
+       $item = `textScrollList -q -si nucleusObjTSL`;
+		$clean=`substitute "^[^.]*\\." $item[0] ""`;
+		$startFrame=`getAttr ($clean+".startFrame")`;
+		intFieldGrp -e -v1 $startFrame startTsl;
+
+		textScrollList -e -ra clothObjTSL;
+       textScrollList -e -ra rigidObjTSL;
+
+    for($obj in $item)
+	{
+
+        string $realitem=`substitute "^[^.]*\\." $obj ""`;        
+        string $transform[] =  `listConnections -d off -s on -t nCloth $realitem`;
+        string $transformShort[] = stringArrayRemoveDuplicates($transform);
+        string $transformRigid[] =  `listConnections -d off -s on -t nRigid $realitem`;
+        string $transformShortR[] = stringArrayRemoveDuplicates($transformRigid);
+        string $transformConst[] =  `listConnections -d off -s on -t dynamicConstraint $realitem`;
+        string $transformShortC[] = stringArrayRemoveDuplicates($transformConst);
+             
+         int $size=`size($transformShort)`;
+               for($i=0;$i<$size;$i++)
+			   {
+               
+                $objState = getObjState($transformShort[$i]);
+               
+						if ($objState)
+								 textScrollList -e -a ("  ON    ." + $transformShort[$i]) clothObjTSL;
+								 
+					   else
+					 
+								 textScrollList -e -a ("off    ." + $transformShort[$i]) clothObjTSL;                                                                 
+                        
+                }
+              int $sizeR=`size($transformShortR)`;
+              for($i=0;$i<$sizeR;$i++)
+			  {
+                
+                $objState = getObjState($transformShortR[$i]);
+						if ($objState)
+								 textScrollList -e -a ("  ON    ." + $transformShortR[$i]) rigidObjTSL;
+								 
+					   else
+					 
+								 textScrollList -e -a ("off   ." + $transformShortR[$i]) rigidObjTSL;
+                        
+                }
+              int $sizeC=`size($transformShortC)`;
+			  
+              for($i=0;$i<$sizeC;$i++)
+			  {
+                
+                $objState = getObjState($transformShortC[$i]);
+						if ($objState)
+								 textScrollList -e -a ("  ON    ." + $transformShortC[$i]) rigidObjTSL;
+								 
+					   else
+					 
+								 textScrollList -e -a ("off   ." + $transformShortC[$i]) rigidObjTSL;
+                        
+                }
+      }       
+}
+
+
+
+// Command for the Enable Selected button.
+global proc setSelDynamics(int $set)
+{
+        // get a list of selected objects in the list
+        string $selnucleus[] = `textScrollList -q -si nucleusObjTSL`;
+        string $selcloth[] = `textScrollList -q -si clothObjTSL`;
+        string $selrigid[] = `textScrollList -q -si rigidObjTSL`;
+        string $selfirst[] =stringArrayCatenate($selnucleus,$selcloth);
+        string $selAll[] =stringArrayCatenate($selfirst,$selrigid );
+        int $sizeall=`size($selAll)`;
+		
+				for ($i=0;$i<$sizeall;$i++)
+				{
+					string $realsel=`substitute "^[^.]*\\." $selAll[$i] ""`;
+					
+						if($set==0)
+						{
+							disableObj($realsel);
+						}
+						else
+						{
+							enableObj($realsel);
+						}				
+				}              
+        dynamicEvalRefreshList(); 
+}
+
+global proc enableObj(string $objTransform)
+{
+        string $objShape[] = `listRelatives -s $objTransform`;  // holds the shape node name
+        string $objType; 
+                                  // holds what kind of object it is
+
+        // find out what kind of object it is
+			   if (size($objShape) > 0)
+						$objType = `nodeType $objShape[0]`;
+			   else
+					  $objType = `nodeType $objTransform`;
+
+        switch ($objType)
+        {
+                case "nCloth":
+                        setAttr ($objShape[0] + ".isDynamic") 1;
+                break;
+                
+                case "nRigid":
+                        setAttr ($objShape[0] + ".isDynamic") 1;
+                break;
+                
+                  case "dynamicConstraint":
+                        setAttr ($objShape[0] + ".enable") 1;
+                break;
+                
+                // these two don't have a shape node, so use their transform name
+
+
+                case "nucleus":
+                        setAttr ($objTransform + ".enable") 1;
+                break;
+
+        }
+}
+
+global proc disableObj(string $objTransform)
+{
+        string $objShape[] = `listRelatives -s $objTransform`;  // holds the shape node name
+        string $objType; // holds what kind of object it is
+
+        // find out what kind of object it is
+        if (size($objShape) > 0)
+                $objType = `nodeType $objShape[0]`;
+        else
+                $objType = `nodeType $objTransform`;
+
+        switch ($objType)
+        {
+                case "nCloth":
+                        setAttr ($objShape[0] + ".isDynamic") 0;
+                break;
+                
+                case "nRigid":
+                        setAttr ($objShape[0] + ".isDynamic") 0;
+                break;
+                
+                case "dynamicConstraint":
+                        setAttr ($objShape[0] + ".enable") 0;
+                break;
+
+                
+                // these two don't have a shape node, so use their transform name
+
+
+                case "nucleus":
+                        setAttr ($objTransform + ".enable") 0;
+                break;
+
+        }
+}
+// Command for the Enable All button.
+global proc setAllDynamics(int $set)
+{
+		 if (`checkBox -q -v clothCB`)
+		 {        
+				
+				string $tslcloth[] = `ls -typ nCloth`;
+				int $sizeNC=`size($tslcloth)`;
+				for ($i=0;$i<$sizeNC;$i++)
+				{
+						setAttr ($tslcloth[$i] + ".isDynamic") $set;
+				}
+		 }
+				
+		 if (`checkBox -q -v rigidsCB`)
+		 {        
+				
+				string $tslrigid[] = `ls -typ nRigid`;
+				int $sizeR=`size($tslrigid)`;
+				for ($i=0;$i<$sizeR;$i++)
+				{
+						setAttr ($tslrigid[$i] + ".isDynamic") $set;
+				}
+		 }
+								
+		if (`checkBox -q -v nucleusCB`)
+		{
+				
+				string $tslnucleus[] = `ls -typ nucleus`;
+				int $sizeN=`size($tslnucleus)`;
+				for ($i=0;$i<$sizeN;$i++)
+				{
+						setAttr ($tslnucleus[$i] + ".enable") $set;
+				}
+		 }
+		 
+		if (`checkBox -q -v constraintCB`)
+		{        
+				
+				string $tslcts[] = `ls -typ dynamicConstraint`;
+				int $sizeC=`size($tslcts)`;
+				for ($i=0;$i<$sizeC;$i++)
+				{
+						setAttr ($tslcts[$i] + ".enable") $set;
+				}
+		 }               
+        dynamicEvalRefreshListall();
+}
+
+
+global proc backspace(int $Choosepanel)
+{
+        // get a list of selected objects in the list
+		
+		string $panelSel[]={"nucleusObjTSL", "clothObjTSL", "rigidObjTSL" };	
+        string $selNuc[] = `textScrollList -q -si $panelSel[$Choosepanel]`;
+        int $sizeB=`size($selNuc)`;
+		
+        for ($i=0;$i<$sizeB;$i++)
+		{
+				string $realcursel=`substitute "^[^.]*\\." $selNuc[$i] ""`;
+		
+						if (getObjState($realcursel))
+						{
+								disableObj($realcursel);
+						}
+						else// if the object is disabled, then enable it
+						{ 
+								enableObj($realcursel);
+						}
+		}
+                   dynamicEvalRefreshList(); 
+}     
+
+     
+
+global proc createCache(int $value)
+{
+
+	string $checkCache[];
+	string $addCrea[];
+	 string $renumcrea;
+	 string $AllCrea[];
+	
+    select -cl;
+	clear($AllCrea);
+    string $selcrea[] = `textScrollList -q -si clothObjTSL`;
+	
+		if (`size($selcrea)`>0)
+		{ 
+			  for($objcrea in $selcrea)
+			  {		
+					  $renumcrea = `substitute "^[^.]*\\." $objcrea ""`;
+					  $addCrea[0]= $renumcrea;	
+					  appendStringArray($AllCrea, $addCrea, 1);
+					  $checkCache= `ls -type cacheFile (listHistory ("-lv",3,"-breadthFirst",  $addCrea[0]))`;
+					  select -r $addCrea[0];
+								if (`size($checkCache)`>0)
+														{
+																								   deleteCacheFile 3 { "keep", "", "nCloth" } ;
+														}
+			  }
+			  print ($AllCrea);
+			  select -r $AllCrea;
+			 
+					  switch ($value)
+					  {
+						case 1: 
+						
+										Crea_nCache;
+						break;
+						
+						case 0:
+									   deleteCacheFile 3 { "keep", "", "nCloth" } ;	
+						break;
+					  }			  
+		}
+		
+		else
+		{
+			warning "select a cloth";
+		}
+}

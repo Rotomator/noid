@@ -1,0 +1,31 @@
+global proc cfxMenu()
+
+{
+global string $showCfxMenuCtrl;
+if (`menu -exists $showCfxMenuCtrl`)
+   deleteUI $showCfxMenuCtrl;
+string $name = "cfxBox";
+global string $gMainWindow;
+$showCfxMenuCtrl = `menu -p $gMainWindow -to true -l $name`;
+menuItem -p $showCfxMenuCtrl -l "Reload" -c uu_Reload;
+menuItem -p $showCfxMenuCtrl -l "Exit" -c uu_Exit;
+
+
+
+}
+global proc uu_Reload()
+{
+	if (`window -exists win_CFXBox`)
+	{
+			deleteUI -window win_CFXBox;
+	}
+	
+source "C:/_noid/maya/tools/cfxBox/cfxBox.mel";
+CFXBox;
+
+}
+
+global proc uu_Exit()
+{
+deleteUI -window win_CFXBox;
+}

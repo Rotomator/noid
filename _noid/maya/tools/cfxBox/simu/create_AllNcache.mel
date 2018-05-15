@@ -1,0 +1,203 @@
+//=============================================================================
+//
+//	create all ncqche			
+//							
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.0
+//
+// Created  :    3/01/2011
+// Modified :    3/01/2011
+//
+// Creator 	:    uu
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "create_windCtrl" to launch the script
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+global proc string[] ListNucleus(){
+
+  string $listnucleus[];
+  string $NucList[] = `ls -visible -fl -typ nCloth -dag`;
+
+  for($obj in $NucList ){
+      string $activeNuc[]=`listConnections -d on -s off -t nucleus $obj`;
+      appendStringArray($listnucleus, $activeNuc, 1);
+      }
+      string $NucVisisble = stringArrayToString($listnucleus, " ");
+
+        print "\/\/ ---------------------------------------------------------------------- \n"; 
+        print ("\/\/ -- List Nucleus visible : " + $NucVisisble +"\n"); 
+    return $listnucleus;
+
+};
+  
+global proc uu_create(){
+
+  select  -cl;
+  string $nucleus[]=`ListNucleus`;
+  string $singleNuc[] = stringArrayRemoveDuplicates($nucleus);
+  
+  for($current in $singleNuc){
+  
+      string $allCache[];
+      setAttr ($current +".enable") 1;
+      string $listncloth[] =`listConnections -t nCloth $current`;
+      string $shorterList[] = stringArrayRemoveDuplicates($listncloth);  
+
+
+      select -r $shorterList;
+      string $selList = stringArrayToString($shorterList, " ");
+    
+          for($ncloth in $shorterList){
+          setAttr ($ncloth +".isDynamic") 1;
+      
+          string $clothshapes[]=`listRelatives -s -path $ncloth`;
+          string $listnCache[] =`listConnections -t cacheFile $clothshapes[0] `;
+          if(`size($listnCache)`>0){
+          appendStringArray($allCache,$listnCache , 1);
+          }
+
+        }
+    string $ListCache = stringArrayToString($allCache, " ");
+        if(!`size($allCache)`){
+    
+       //set directory 
+    
+        string $fileName = `file -q -sceneName`;
+        string $DName=`match "[^/\\]*$" $fileName`;
+        string $DNamereduce=`match "^[^\.]*" $DName`;
+        string $component =match( "^.*/", $fileName );
+        int $sz = size( $component );
+
+      // Strip off trailing '/'
+      //
+          if ( ( $sz > 1 ) && ( substring( $component, $sz, $sz ) == "/" ) ) {
+	      $component = substring( $component, 1, ($sz - 1) );
+	      }
+
+    	string $cacheDirectory= $component + "_SyCache/" + $DNamereduce + "_SyCache/";
+	    string $cacheName= $current;	  
+    	string $foldername = `substitute ":[^:]*$" $cacheName ""`;
+	    string $foldercache = $cacheDirectory + $foldername ; 			
+	    string $shortCacheName = `match "[^:]*$"  $current`;
+    	string $cachePath = $foldercache + "/" + $shortCacheName; 
+        print "\/\/ ---------------------------------------------------------------------- \n"; 
+        print ("\/\/ -- Create nCache on " + $selList +"\n"); 
+        $cacheFile = `	doCreateNclothCache 4 { "2", "0", "2", "OneFile", "0", $cachePath,"1","","0", "replace", "1", "1", "1","0","1" }` ;
+        print "\/\/ ---------------------------------------------------------------------- \n"; 
+        print ("\/\/ -- nCache on " + $selList +" OK \n"); 
+    
+    
+            for($nclothON in $shorterList){
+            setAttr ($nclothON +".isDynamic") 0;
+            }
+
+        setAttr ($current +".enable") 0;
+        }
+        
+        else{
+        print "\/\/ ---------------------------------------------------------------------- \n"; 
+        print ("\/\/ -- Cache already connect to " + $selList + " name " +  $ListCache + " skip to next \n");      
+        }
+        
+    clear($allCache);    
+      
+    }
+    
+  select  -cl;
+
+}
+
+
+
+global proc createCaches()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	
+
+	
+	/*
+	process
+	-----------------------------------------------------*/	
+
+ string $wndName = "Create";
+        
+        // if window exists
+        if (`window -ex $wndName`)
+                deleteUI  -window $wndName;      // kill it
+			
+        // if pref exists
+		  if (`windowPref -exists $wndName`) 
+			  		windowPref -remove $wndName; //delete it
+  
+        window -t "Create" -wh 200 80 -mxb 0 $wndName;
+		
+		string $form = `formLayout -numberOfDivisions 100`;
+
+		string $text=	`columnLayout`;	
+
+		text -l "Launch ?" ;
+		
+		setParent..;
+		
+string $main=	`rowColumnLayout -numberOfRows 1 mainLayout`;
+		 
+					button -w 50 -l "YES" -c "uu_create()";								 
+					button -w 50 -l "NO" -c   ("deleteUI  -window " + $wndName) ;
+					
+		setParent..;
+		
+      formLayout -edit
+	  
+	 -attachForm     $text "top"  10
+    -attachPosition $text "left"  5 0
+
+	  -attachControl     $main "top"  5 $text
+    -attachPosition $main "left"  5 0
+    -attachForm     $main "left"  5
+	 -attachForm     $main "right"  5
+
+
+$form;
+
+									 
+        showWindow $wndName;
+			
+	/*
+	retours
+	-----------------------------------------------------*/
+	
+	if ($mgDebug)
+	{
+		print ("\n######\nScript : \n\n");
+		
+		print ("\n######\n");
+	}	
+	
+	/*
+	*/	
+}

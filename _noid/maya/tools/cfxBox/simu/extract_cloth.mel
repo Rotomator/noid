@@ -1,0 +1,683 @@
+//all proc --------------------------------------------------------------
+
+
+global proc  string[] detachSeparateUU()
+{
+		/*
+	variables
+	-----------------------------------------------------*/
+	
+	string $nameSplitSkip[];
+	string $faceNum[];
+	string $temp[];
+	string $newCloth[];
+	string $newCollider[];
+	string $newFaceSel[];
+	string $newFaceSelC[];
+	string $newAllFaces[] ;
+	string $newAllFacesC[] ;
+	string $storeVx[];
+	string $diff[];
+	string $newColliderName;
+	string $newShape[];
+	
+	
+		/*
+	process
+	-----------------------------------------------------*/	
+	
+	
+	string $origFaceSel[] = `filterExpand -ex 1 -sm 34`;
+	string $origObjShape[] = `listRelatives -p $origFaceSel`;
+	string $origObj[] = `listRelatives -p $origObjShape`;
+	
+	//Get my selected face numbers into $faceNum
+		for ($step = 0, $skip = 0; $step < size($origFaceSel); $step++, $skip++)
+		{
+			tokenize $origFaceSel[$step] "." $temp;
+			$nameSplitSkip[$skip] = $temp[0];
+			$skip++;
+			$nameSplitSkip[$skip] = $temp[1];
+			clear $temp;
+		}
+		
+		
+		for ($step2 = 0, $skip2 = 1; $step2 < (size($nameSplitSkip)/2); $step2++, $skip2 = $skip2 + 2)
+		{
+			$faceNum[$step2] = $nameSplitSkip[$skip2]; //every other value	
+		}
+			
+		
+	//Dupe original object
+	$newCloth =A_dupliObjUU($origObj[0],"clothTmp");
+	$newShape=`listRelatives -s $newCloth[0]`;
+	$newCollider=A_dupliObjUU($origObj[0],"clothCollid");
+
+	$newAllFaces= `ls ($newCloth[0] + ".f[*]")`;
+	$newAllFacesC = `ls ($newCollider[0] + ".f[*]")`;
+	
+	
+	//Make new array for face selection on $newCloth
+		for ($step3 = 0; $step3 < size($faceNum); $step3++)
+		{
+			$newFaceSel[$step3] = ($newCloth[0] + "." + $faceNum[$step3]);
+			$newFaceSelC[$step3] = ($newCollider[0] + "." + $faceNum[$step3]);				
+		}
+	
+		
+	//Delete inverse face selection on duplicate
+	
+	 $diff = stringArrayRemove($newFaceSel,(`filterExpand  -sm 34 $newAllFaces`));
+     delete $diff;
+
+	//store Vtx selection
+		
+	$storeVx = `polyListComponentConversion -toVertex $newFaceSelC`;
+
+	
+	delete $newFaceSelC;
+			
+	createShader({0.0,0.3, 0.0},$newCollider[0],$newCollider[0]);
+	
+	select -r $newCloth[0];
+
+		/*
+	retours
+	-----------------------------------------------------*/
+	
+	return $storeVx;
+	
+}
+
+
+
+// --------------------------------------------------------------
+//detach --------------------------------------------------------------
+// --------------------------------------------------------------
+
+global proc string[] A_dupliObjUU(string $sel,string $name)
+{
+	
+			/*
+	variables
+	-----------------------------------------------------*/
+	
+	string $filtSel[];
+	string $curSel;
+	string $tempSel[];
+	string $curPar;
+	string $curType;
+	int    $curFrame;
+	string $cleanName;
+	string $dupliPar;
+	string $dupliShp;
+	string $outSourcePlug;
+	string $inDestPlug;
+	string $result[];
+	
+	
+			/*
+	process
+	-----------------------------------------------------*/	
+	
+	
+	// ------------------------------------------------------------
+	// -- Check selection
+	//
+
+	
+	$filtSel = `filterExpand -fullPath true -sm 12 -sm 10 -sm 9 -sm 68 $sel`;
+	
+
+		// ------------------------------------------------------------
+		// -- Create the new object
+		//
+		$tempSel  = `listRelatives -p -pa $filtSel[0]`;
+		
+		$curType  = `nodeType $filtSel[0]`;
+		
+		// Remove any existing nameSpace and pipes
+		
+		
+		$dupliPar = `createNode transform -n $name`;
+		$dupliShp = `createNode $curType -p $dupliPar -n ($dupliPar + "Shape")`;
+		
+		
+
+		// ------------------------------------------------------------
+		// -- Connect in/out plugs
+		//
+		connectAttr -f ($filtSel[0] + ".outMesh") ($dupliPar +  ".inMesh");
+		getAttr -silent ($dupliPar + ".outMesh"); // forces evaluation
+	    disconnectAttr ($filtSel[0] + ".outMesh") ($dupliPar +  ".inMesh");
+		
+		$result[size($result)] = $dupliPar;
+		
+		//asign same shader than source Obj
+		
+		string $shapes[]=`listRelatives -s -path -ni  $sel`;
+		ART_transferObjShading $shapes[0] $dupliShp;
+			/*
+	retours
+	-----------------------------------------------------*/
+	
+	// ------------------------------------------------------------
+	// -- Return all resulting duplicates
+	//
+	return $result;
+}
+
+
+
+ // --------------------------------------------------------------
+//delete preset --------------------------------------------------------------
+// --------------------------------------------------------------
+
+global proc deleteAttrPresetUU()
+{
+			/*
+	variables
+	-----------------------------------------------------*/
+	
+	string $nodeType;
+	string $ppath ;
+	string $selectedPresets;
+	string $allTmp[];
+				/*
+	process
+	-----------------------------------------------------*/	
+	
+	$nodeType = "nCloth";
+	$ppath = `internalVar -userPrefDir`;
+	$ppath = substitute( "prefs", $ppath, "presets/attrPresets");
+	$ppath  = $ppath + $nodeType; 	
+	$allTmp=`getFileList  -folder ($ppath +"/") -filespec "Tmp_cloth*"`;
+	
+	for($obj in $allTmp)
+	{
+		sysFile -delete ($ppath + "/" + $obj);
+	}
+		
+					/*
+	retours
+	-----------------------------------------------------*/
+}
+
+
+
+//----------------------------------------------------------
+//----------------------------------------------------------
+//----------------------------------------------------------
+//CALL PROC
+//----------------------------------------------------------
+//----------------------------------------------------------
+//----------------------------------------------------------
+global proc customCloth()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	string $origFace[];
+	string $origShapetmp[];
+	string $origObjtmp[];
+	string $ClothShape[];
+	string $activeNucleus[];
+	string $nodeName[];
+	string $vtx[];
+	string $lst[];
+	string $parents[] ;
+	string $NewClothShape[];
+	string $dupliAnim[];
+	string $Collid[];
+	string $rigidSource[];
+	string $finalCloth[];
+	string $tranfertVx;
+	string $storeNew[];
+	int $count[] ;
+	string $storeRef[];
+	int $rand;
+	float $NewColor;
+	string $objToCache[];
+	
+	/*
+	process
+	-----------------------------------------------------*/	
+//clear all last preset
+
+	deleteAttrPresetUU();
+	
+//check if group already exist
+
+	if (objExists("clothTmp"))
+		{
+			error "custom cloth already exist ------- try again";		
+		}
+
+//check if somthing selected
+
+	$origFace = `filterExpand -ex 1 -sm 34`;
+	
+	
+	if (`size($origFace)`==0)
+	{
+		error "please do something smart";
+	}
+	
+//find nucleus associate and get it to current 
+
+	$origShapetmp= `listRelatives -p $origFace`;
+	$origObjtmp= `listRelatives -p $origShapetmp`;
+	//$nodeName=`listConnections -t nCloth $origShapetmp[0]`;
+	$nodeName=`listConnections -t nCloth ($origObjtmp[0] + "Shape")`;
+	$ClothShape=`listRelatives -s -ni -path $nodeName[0]`;
+	$activeNucleus=stringArrayRemoveDuplicates(`listConnections -t nucleus $ClothShape[0]`);
+	
+	saveAttrPreset $ClothShape[0] "Tmp_cloth" true;
+	
+	$vtx=`detachSeparateUU`;
+	
+	getActiveNucleusNode( false,true ); //force load proc
+	setActiveNucleusNode $activeNucleus[0];
+	getActiveNucleusNode( false,true );
+
+
+//create and set cloth Tmp
+	select -r "clothTmp";
+
+	createNCloth 0;
+	$lst=`ls -sl`;
+	$parents =`listRelatives -p $lst[0]`;
+	rename $parents[0] "clothTmp_nCloth";
+	$NewClothShape=`listRelatives -s -ni -path "clothTmp_nCloth"`;
+
+
+
+		applyAttrPreset  $NewClothShape[0] "Tmp_cloth"  1;
+
+		setAttr ($ClothShape[0]+".isDynamic") 0;
+		setAttr ($ClothShape[0]+".collide") 0;
+		setAttr ($ClothShape[0]+".selfCollide") 0;
+
+
+//create Mesh cloth Ref 
+
+	select -r $origObjtmp[0];
+	$dupliAnim=A_dupliObjUU($origObjtmp[0],"colth_baked");
+	$objToCache=`listRelatives -s $dupliAnim[0]`;
+	
+	createShader({.0, .2,.2},$dupliAnim[0],$dupliAnim[0]);
+
+//create Mesh for cts 
+
+	select -r $origObjtmp[0];
+	string $duplicts[]=A_dupliObjUU($origObjtmp[0],"clothCts");
+	//$objToCache=`listRelatives -s $dupliAnim[0]`;
+	select -r "clothCts";
+
+	$Collid=`makeCollideNCloth`;
+	string $rigidCts[]=`listRelatives -p $Collid`;	
+	$rigidCts[0]=`rename $rigidCts[0] clothCts_nRigid` ;
+	
+	setAttr "clothCts_nRigidShape.thickness" 0;
+	setAttr "clothCts_nRigidShape.collide" 0;
+	setAttr "clothCts_nRigidShape.trappedCheck" 0;
+	setAttr "clothCts_nRigidShape.pushOutRadius" 0;
+	
+	//assign shader
+	
+	sets -e -forceElement Mtl_clothCollidCfxTmp "clothCts";
+
+//create collid without clothFaces
+
+	select -r "clothCollid";
+	
+	$Collid=`makeCollideNCloth`;
+
+	$rigidSource=`listRelatives -p $Collid`;	
+	$rigidSource[0]=`rename $rigidSource[0] clothCollid_nRigid` ;
+	setAttr "clothCollid_nRigidShape.thickness" 0.02;
+
+
+//wrap collid to cloth ref
+
+	select -r "clothCollid" $dupliAnim[0];
+	doWrapArgList "7" { "1","0","1", "2", "1", "1", "0", "0" };
+
+//wrap cts to cloth ref
+
+	select -r "clothCts" $dupliAnim[0];
+	doWrapArgList "7" { "1","0","1", "2", "1", "1", "0", "0" };
+
+
+//------------------------------------------
+//recup anim
+
+	$finalCloth=A_dupliObjUU($origObjtmp[0],"clothNew");
+		
+		select -cl;
+		
+		for ($vx in $vtx)
+		{
+			$tranfertVx=`substitute "clothCollid" $vx "clothNew"`;
+			select -add $tranfertVx;
+		}
+		$storeNew=`ls -sl`;
+
+		select -r "clothTmp";
+		A_outMesh(`ls -sl`);
+		
+		select -r $storeNew "clothTmp_OUT";
+		doWrapArgList "7" { "1","0","1", "2", "1", "1", "0", "0" };
+					
+		$count= `polyEvaluate -v $finalCloth[0]`;
+		select ("clothNew.vtx [0:" + ($count[0] - 1) + "]");
+		select -d $storeNew;
+		$storeRef=`ls -sl`;
+
+		select -r $storeRef $dupliAnim[0];
+		doWrapArgList "7" { "1","0","1", "2", "1", "1", "0", "0" };
+
+		checkCache($ClothShape ,$objToCache);
+
+		clear $vtx; //clear stored vtx
+
+
+//create hierarchy grp
+
+	group -n hide_it clothTmp_OUT clothTmp_OUTBase colth_baked colth_bakedBase colth_bakedBase1 colth_bakedBase2 ;
+	group -n show_it clothNew hide_it ;
+	group -n collid_it clothCts clothCts_nRigid clothCollid clothCollid_nRigid ;
+	group -n passive_it collid_it ;
+	group  -n Do_it clothTmp clothTmp_nCloth passive_it ;
+	setAttr "passive_it.visibility" 0;
+	setAttr "hide_it.visibility" 0;
+
+
+
+	/*
+	retours
+	-----------------------------------------------------*/
+
+}
+
+//-------------------------------------------------------
+//constraint border
+//-------------------------------------------------------
+
+global proc createCtrs()
+{
+	
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	string $listVx[];
+	string $Ctrs;
+	string $listComp[];
+	int $num;
+	string $list[];
+
+	/*
+	process
+	-----------------------------------------------------*/	
+	
+	$listComp=`ls - sl`;
+	
+	$listVx=`polyListComponentConversion -toVertex $listComp`;
+	
+	select -r $listVx clothCts;
+	createNConstraint pointToSurface 0;
+	pickWalk -d up;
+	$list=`ls -typ transform "ClothTmp_border_pts*" `;
+	$num=size($list) +1;
+	 $Cstr=`rename ("ClothTmp_border_pts"+$num)`;
+	setAttr ("ClothTmp_border_ptsShape"+$num+".constraintMethod") 0;
+	setAttr ("ClothTmp_border_ptsShape"+$num+".excludeCollisions") 1;
+	
+	
+	parent $Cstr passive_it;
+
+	/*
+	retours
+	-----------------------------------------------------*/
+
+}
+
+//-------------------------------------------------------
+//createShaders
+//-------------------------------------------------------
+
+global proc createShader(float $color[], string $name,string $obj)
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	
+
+	
+	/*
+	process
+	-----------------------------------------------------*/	
+	
+		if(!objExists("Mtl_"+$name+"CfxTmp.surfaceShader") )
+			{
+				
+					if(!objExists("Mtl_"+$name+"CfxTmp_blinn") )
+						{
+							shadingNode -asShader blinn;
+							rename ("Mtl_"+$name+"CfxTmp_blinn");
+						}
+						
+			  sets -renderable true -noSurfaceShader true -empty -name ("Mtl_"+$name+"CfxTmp");
+					
+			  connectAttr -f  ("Mtl_"+$name+"CfxTmp_blinn.outColor") ("Mtl_"+$name+"CfxTmp.surfaceShader");
+			 
+			  	setAttr ("Mtl_"+$name+"CfxTmp_blinn.incandescence") -type double3 $color[0] $color[1] $color[2] ;
+				setAttr ("Mtl_"+$name+"CfxTmp_blinn.color") -type double3 1 1 1 ;
+				setAttr ("Mtl_"+$name+"CfxTmp_blinn.eccentricity") 0;
+				setAttr ("Mtl_"+$name+"CfxTmp_blinn.specularRollOff") 0;
+				setAttr ("Mtl_"+$name+"CfxTmp_blinn.specularColor") -type double3 0 0 0 ;
+				setAttr ("Mtl_"+$name+"CfxTmp_blinn.reflectivity") 0;
+				setAttr ("Mtl_"+$name+"CfxTmp_blinn.diffuse") 0.5;
+			
+				
+				
+				}
+		
+		select -r $obj;
+		sets -forceElement ("Mtl_"+$name+"CfxTmp");
+
+
+	
+	/*
+	retours
+	-----------------------------------------------------*/
+	
+	if ($mgDebug)
+	{
+		print ("\n######\nScript : \n\n");
+		
+		print ("\n######\n");
+	}	
+	
+	/*
+	*/	
+}
+
+//-------------------------------------------------------
+//checkCache in ref Cloth
+//-------------------------------------------------------
+
+global proc checkCache(string $RefClothShape[],string $NewClothShape[])
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	string $clothCache[];
+	string $cahcePath;
+	string $cacheName;
+	string $channels[];
+	string $switch;
+	string $cacheNode;
+	
+	/*
+	process
+	-----------------------------------------------------*/	
+
+	$clothCache=`listConnections -t cacheFile $RefClothShape[0]`;
+
+	if (`size($clothCache)`==0)
+	{
+		warning ("No cache found on $objShape do it by yourself");
+	}
+	
+	else
+	{
+		$cahcePath=`getAttr ($clothCache[0]+".cachePath")`;
+		$cacheName=`getAttr ($clothCache[0]+".cacheName")`;
+				
+		$channels = `cacheFile -fileName ($cahcePath+$cacheName+".xml") -q -channelName`;						
+		$switch = createHistorySwitch($NewClothShape[0],false);
+		$cacheNode = `cacheFile -attachFile -f ($cahcePath+$cacheName+".xml") -cnm $channels[0] -ia ($switch+".inp[0]")`;
+		setAttr ($switch+".playFromCache") true;
+	}
+
+
+	
+	/*
+	retours
+	-----------------------------------------------------*/
+	
+	if ($mgDebug)
+	{
+		print ("\n######\nScript : \n\n");
+		
+		print ("\n######\n");
+	}	
+	
+	/*
+	*/	
+}
+
+global proc deleteAll()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	string $sourceObj[];
+	string $sourceShape[];
+
+	
+	/*
+	process
+	-----------------------------------------------------*/	
+	$sourceObj=`ls -sl`;
+		if(`size($sourceObj)`==1)
+		{	
+			$sourceShape=`listRelatives -s -ni $sourceObj[0]`;
+			applyAttrPreset  $sourceShape[0] "Tmp_cloth"  1;
+		}
+		
+		else
+		{	
+			warning ("preset not apply check your collid attr or relaunch with selected the nloch node source");
+		}
+		
+	delete show_it Do_it ;
+	select -r "*CfxTmp*" ;
+	delete;
+//remove preset
+
+deleteAttrPresetUU();
+	
+//	reset sourceCloth
+	/*
+	retours
+	-----------------------------------------------------*/
+	
+	if ($mgDebug)
+	{
+		print ("\n######\nScript : \n\n");
+		
+		print ("\n######\n");
+	}	
+	
+	/*
+	*/	
+}
+
+
+//-------------------------------------------------------
+//-------------------------------------------------------
+//-------------------------------------------------------
+//USER INTERFACE
+//-------------------------------------------------------
+//-------------------------------------------------------
+//-------------------------------------------------------
+//-------------------------------------------------------
+global proc customC()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	
+
+	
+	/*
+	process
+	-----------------------------------------------------*/	
+
+ string $wndName = "customCloth";
+        
+        // if window exists
+        if (`window -ex $wndName`)
+                deleteUI $wndName;      // kill it
+			
+        // if pref exists
+		  if (`windowPref -exists $wndName`) 
+			  		windowPref -remove $wndName; //delete it
+  
+        window -t "Nc" -wh 200 110 -mxb 0 $wndName;
+		
+
+		 columnLayout -cw 200 -cat "both" 3 mainLayout;
+		 
+									separator -height 10 -style "none";
+									text -label "Custom Cloth";
+									separator -height 10 -style "single";				
+									 button -l "Create" -c "customCloth()";
+									 separator -st "none";
+									 button -l "Border" -c "createCtrs()";
+									 separator -st "none";
+									 button -l "Clear" -c "deleteAll()";
+
+									 
+        showWindow $wndName;
+			
+	/*
+	retours
+	-----------------------------------------------------*/
+	
+	if ($mgDebug)
+	{
+		print ("\n######\nScript : \n\n");
+		
+		print ("\n######\n");
+	}	
+	
+	/*
+	*/	
+}
+
+
+

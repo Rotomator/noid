@@ -1,0 +1,2100 @@
+//=============================================================================
+//
+//	A.RT Box - usefull tools for Modeling, Setup and Rendering pipeline.
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.10
+//
+// Created  :    28/06/2007
+// Modified :    17/09/2009
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "ARTBox" to open the UI.
+//				---------------------------------------------------
+//
+//				- use "ARTpivOrig" to place pivots of selected objects at world's origin
+//
+//				- use "ARTpivOrigHi" to place pivots of selected hierarchy at world's origin
+//
+//				- use "ARTpivCopy" to place destination pivot as the source one
+//
+//				- use "ARTsnapToPiv" to snap destination object to the source object's pivot
+//
+//				- use "ARTpivVtx" to snap the Meshe's pivot to a vertex
+//
+//				- use "ARTcleanNorm" to clean meshes' Normals and freeze vertices
+//
+//				- use "ARTcleanKeepNorm" to clean meshes and freeze vertices while keeping the Normals' angles
+//
+//				- use "ARTmirrorMesh" to mirror and rename selected meshes according to its pivot in the "X" axe.
+//				---------------------------------------------------
+//
+//				- use "ARTtransferObjShading" to transfer shading from source to destination object
+//
+// 				- use "ARTtransferUV" to transfer UVs from one source to multiple destination objects
+//				---------------------------------------------------
+//
+//				- use "ARTmaterializeBS" to materializes all the shapes contained
+//				in the blendshape of the selected Mesh
+//
+//				- use "ARTconnS2BS" to connect back the selected Shapes to the selected BlendShape
+//
+//				- use "ArecupBlendShape" to launch an UI that allows transfering shapes from source to
+//				destination meshes with different topolgies
+//
+//				- use "ARTcopySkin" to copy the skinning from source to destination object
+//				with different topologies (world match)
+//
+//				- use "ARTmoveSkinnedBone" to move a bone without having to detach and re-attach the skin
+//
+//				- use "ARTskinDeform" to bake mesh deformations based upon bones movements
+//
+//				- use "ARTproxyObj" to create proxy shapes that depends and inherits
+//				all deformations from selected meshes
+//
+//				- use "ARTproxyObjP" to create parallel proxy shapes (in another transform)...
+//				---------------------------------------------------
+//
+//				- use "ARTnewLinkSet" with the name of the Set as arg. to create that Set
+//				  with the selected Objects and Lights
+//
+//				- use "ARTaddToLinkSet" to add selected Obj to 1 selected Set
+//
+//				- use "ARTremoveFromLinkSet" to remove selected Obj from 1 selected Set
+//
+//				- use "ARTautoLinkSets" to auto-link the sets among them
+//
+//				- use "ARTdoLinkSets" to create linkSets from actual lightLinking
+//
+//				- use "ARTnoIllumByDefault" to remove the selected ligths from the defaultLightSet
+//
+//				- use "ARTlightLinkerClean" to clean all unneeded connections 
+// 				  from the defaultLightSet & defaultObjectSet
+//
+// 				- use "ARTlightLinkerFlush" to flush all the lightLinkers
+//
+//-----------------------------------------------------------------------------
+//
+// Source :		- ATools.mel for generic procedures
+//
+//				- ArecupBlendShape.mel for blendShape tools
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//------------------------------     Modeling Procs    ------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that places object's pivots at world's origin
+//		<< takes for arg an array of transforms
+//		<< takes for arg a boolean to consider hierarchy or only passed objects
+//
+//-------------------------------------------------------------------------
+
+global proc ART_pivOrig ( string $sel[], int $hierarchy )
+{
+	string $curSel;
+	string $command;
+	
+	
+	if ($hierarchy)
+		$sel = `ls -dag -type transform $sel`;
+	
+	
+	if (!`size (ls ("-typ", "transform", $sel))`)
+		error "Select at least one transform !";
+
+
+	for ($curSel in $sel)
+	{
+		$command = "move -a 0 0 0 " +  $curSel + ".scalePivot " + $curSel +".rotatePivot ";
+		eval($command);
+	}
+}
+
+
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that places the destination pivot like the source one
+//		<< takes for arg a source and a destination Transform
+//
+//-------------------------------------------------------------------------
+
+global proc ART_pivCopy ( string $sourceSel, string $destSel )
+{
+	float $pivOrig[6];
+
+	$pivOrig = `xform -q -ws -piv $sourceSel`;
+
+	// move pivot only
+	xform -ws -piv $pivOrig[0] $pivOrig[1] $pivOrig[2] $destSel;
+}
+
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that snaps the destination object to the source object's pivot
+//		<< takes for arg a source and a destination Transform
+//
+//-------------------------------------------------------------------------
+
+global proc ART_snapToPiv ( string $sourceSel, string $destSel )
+{
+	float $pivOrig[3];
+	float $pivDest[3];
+
+	$pivOrig = `xform -q -ws -rp $sourceSel`;
+	$pivDest = `xform -q -ws -rp $destSel`;
+
+	// move object
+	xform -ws -t ($pivOrig[0]-$pivDest[0]) ($pivOrig[1]-$pivDest[1]) ($pivOrig[2]-$pivDest[2]) $destSel;
+}
+
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that snaps destination's pivot to a vertex of the source one
+//		<< takes for arg one or more Meshes
+//		<< takes for arg a vertex number (where it snaps)
+//
+//-------------------------------------------------------------------------
+
+global proc ART_pivVtx ( string $sel[], int $vtxNbr)
+{
+	string $curSel;
+	float $vtxOrig[3];
+
+	
+	for ($curSel in $sel)
+	{
+		// Get the vtx placement
+		$vtxOrig = `xform -q -ws -t ($curSel + ".vtx[" + $vtxNbr + "]")`;
+
+		// move pivot to the vtx position
+		xform -ws -piv $vtxOrig[0] $vtxOrig[1] $vtxOrig[2] $curSel;
+	}
+}
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that cleans Normals of the selected meshes
+//		<< takes for arg one or more source Meshes
+//		<< takes for arg a boolean to keep/reset Normals
+//
+//-------------------------------------------------------------------------
+
+global proc ART_cleanNorm (string $sel[], int $mode)
+{
+	string $curSel;
+	
+	
+	$sel = ATools_listPolyShapes($sel);
+
+	if (`size($sel)` == 0)
+		error "Select a least one Mesh !";
+
+	
+	for ($curSel in $sel)
+	{
+		setAttr ($curSel + ".doubleSided") 0;
+		setAttr ($curSel + ".opposite") 0;
+		
+		// Unlock and conform normals
+		polyNormal -normalMode 2 -userNormalMode 0 -ch 1 $curSel;
+		
+		// Reset and soften normals if the variable "mode" = 1
+		if ($mode)
+		{
+			polySetToFaceNormal $curSel;
+			polySoftEdge -a 180 -ch 1 $curSel;
+		}
+		
+		// Freeze histoàry and vertices
+		delete -ch $curSel;
+	}
+}
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that mirrors and rename selected meshes in the "X" axe.
+//		<< takes for arg one or more Meshes
+//
+// -- /!\ -- Nomenclature taken into account
+//
+// based on suffixes like "_LT" and "_RT"
+// ie : "ZBRA_CorsetButton_LT" becomes "ZBRA_CorsetButton_RT" and vice/versa
+//
+//-------------------------------------------------------------------------
+
+global proc ART_mirrorMesh (string $sel[])
+{
+	string $curSel;
+	string $curParent[];
+	string $tmpArr[];
+	string $mirSel;
+	string $newName;
+	string $result[];
+	
+	
+	$sel = ATools_listPolyShapes($sel);
+
+	if (`size($sel)` == 0)
+		error "Select at least one transform !";
+
+	
+	for ($curSel in $sel)
+	{
+		$curParent = `listRelatives -parent -typ transform $curSel`;
+		$curSel    = $curParent[0];
+		
+		// Duplicate and mirror
+		$tmpArr = `duplicate -rc $curSel`;
+		$mirSel = $tmpArr[0];
+		setAttr ($mirSel + ".scaleX") -1;
+		catchQuiet (makeIdentity ("-a", 1, "-s", 1, $mirSel));
+
+		setAttr ($mirSel + ".doubleSided") 0;
+		setAttr ($mirSel + ".opposite") 0;
+		polyNormal -ch 0 -normalMode 4 $mirSel;
+		
+		// Rename
+		if (`gmatch $curSel "*_LT"`)
+		{
+			$newName = `match ".*[^_LT]" $curSel`;
+			$newName +=  "_RT";
+			$mirSel = `rename $mirSel $newName`;
+		}
+		else if (`gmatch $curSel "*_RT"`)
+		{
+			$newName = `match ".*[^_RT]" $curSel`;
+			$newName +=  "_LT";
+			$mirSel = `rename $mirSel $newName`;
+		}
+
+		// Add to result array
+		$result[size($result)] = $mirSel;		
+	}
+	
+	select -r $result;
+	print ("// Mirrored meshes : " + stringArrayToString($result, ", ") + " \n");
+}
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//------------------------------     Map.Shad. Procs    -----------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that transfers an object's shading to another
+//		<< takes for arg a source Shape and a destination Shape
+//
+//-------------------------------------------------------------------------
+
+global proc ART_transferObjShading ( string $sourceSel, string $destSel )
+{
+	string $listSG[];
+	string $curSG;
+	string $listSGObjs[];
+	string $curSGObj;
+	string $curShape;
+	string $hasOneSG;
+	string $tempSel[];
+	string $curCompon;
+	string $newSGObj;
+	int    $fullAssign = 0;
+	string $listFilterSGObjs[];
+	
+	
+	if (!`size (ls ("-typ", "shape", $sourceSel))` || !`size (ls ("-typ", "shape", $destSel))`)
+		error "Select only 2 Shapes !";
+	
+	
+	
+	// -- Get all the SGs assigned to the source obj
+	//
+	$tempSel 	= `ls -l $sourceSel`;
+	$sourceSel 	= $tempSel[0];
+	$listSG 	= `listSets -ets -object $sourceSel -type 1`;
+	
+	
+	
+	for ( $curSG in $listSG )
+	{
+		clear $listSGObjs;
+		clear $listFilterSGObjs;
+		
+		
+		// -- Get all the objects/components affected by the current SG...
+		//
+		$listSGObjs = `sets -query $curSG`;
+		
+		
+		for ( $curSGObj in $listSGObjs )
+		{
+			// Get the shape if $curSGObj is a component
+			$tempSel = ATools_listShapes ({$curSGObj});
+			$curShape = $tempSel[0];
+
+
+			// -- Treat only the ones that corresponds to the sourceObject...
+			//
+			if ( $curShape == $sourceSel )
+			{
+				// Discard all other SGs if there is a single SG assigned to the whole Object
+				$tempSel  = `ls -l $curSGObj`;
+				$hasOneSG = $tempSel[0];
+				
+				if ( $hasOneSG == $sourceSel )
+				{
+					$fullAssign = 1;
+
+					break;
+				}
+				else
+				{
+					$curCompon = `match "[.].*$" $curSGObj`;
+					$newSGObj = $destSel + $curCompon;
+					
+					$listFilterSGObjs[size($listFilterSGObjs)] = $newSGObj;
+					stringArrayRemoveDuplicates $listFilterSGObjs;
+				}
+			}  
+		}
+		
+		
+		// -- Assign the current SG to the dest Object only if it's a "Component" assignation
+		//
+		if ( !$fullAssign )
+			sets -e -forceElement $curSG $listFilterSGObjs;
+		else
+			break;
+	}
+	
+	
+	
+	// -- If there's a SG assigned to the full object, then assign only this one to the dest Object
+	//
+	if ( $fullAssign )
+			sets -e -forceElement $curSG $destSel;
+	
+}
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that transfer UVs by passing through the destination object's
+// shapeOrig, in order not to modify it's history.
+//		<< takes for arg a source Shape and multiple destination Shapes
+//		<< takes for arg an int to define the transfert mode (0/world 1/local 4/component)
+//
+//-------------------------------------------------------------------------
+
+global proc ART_transferUV (string $sel[], int $transfMode)
+{
+	string $sourceObj;
+	string $tempArray[];
+	string $destObjs[];
+	string $curDestObj;
+	string $listDstShapeOrig[];
+	string $destShapeOrig;
+	
+	
+	$sel = ATools_listPolyShapes($sel);
+	
+	if (`size($sel)` < 2)
+		error "Select a source Mesh then one or more destination Meshes";
+	
+	
+	$sourceObj = $sel[0];
+	$tempArray[0] = $sourceObj;
+	$destObjs = stringArrayRemove($tempArray, $sel);
+	
+	
+	for ($curDestObj in $destObjs)
+	{
+		$curParent 		  = `listRelatives -fullPath -parent -typ transform $curDestObj`;
+		$listDstShapeOrig = `ls -intermediateObjects -l (listRelatives ("-s", "-pa", "-fullPath", "-type", "mesh", $curParent[0]))`;
+
+		if (`size($listDstShapeOrig)` == 1)
+		{
+			$destShapeOrig = $listDstShapeOrig[0];
+
+			setAttr ( $destShapeOrig + ".io") 0;
+			transferAttributes -transferPositions 0 -transferNormals 0 -transferUVs 2 -transferColors 2
+				-sampleSpace $transfMode -sourceUvSpace "map1" -targetUvSpace "map1" -flipUVs 0 -colorBorders 1 $sourceObj $destShapeOrig;
+
+			delete -constructionHistory $destShapeOrig;
+			setAttr ( $destShapeOrig + ".io") 1;
+		}
+		else if (`size($listDstShapeOrig)` == 0)
+		{
+			transferAttributes -transferPositions 0 -transferNormals 0 -transferUVs 2 -transferColors 2 
+				-sampleSpace $transfMode -sourceUvSpace "map1" -targetUvSpace "map1" -flipUVs 0 -colorBorders 1 $sourceObj $curDestObj;
+
+			delete -constructionHistory $curDestObj;
+		}
+		else
+		{
+			warning ($curDestObj + " has more than one shapeOrig, skipping it...\n");
+		}
+	}
+}
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Setup Procs    -------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that connects back the shapes to a blendshape
+// (connects the shapes to the blendshape's target on a "name-based" fashion)
+//		<< takes for arg a BlendShape and a list of Shapes
+//
+//-------------------------------------------------------------------------
+
+global proc ART_connS2BS (string $blendShapeName, string $shapesNames[])
+{
+	int $sizeTargets;
+	int $indexTarget;
+	int $i;
+	string $targetsName[];
+	string $tempName[];
+	string $curShapeName;
+	
+	// number of targets contained in the blendShape node
+	$sizeTargets = `blendShape -q -weightCount ($blendShapeName + ".weight")`;
+	
+	
+	// -- Get the targets' names from the blendShape
+	//
+	for ($i=0; $i<$sizeTargets; $i++)
+	{
+		$tempName = `listAttr ($blendShapeName + ".weight[" + $i + "]")`;
+		$targetsName[$i] = $tempName[0];
+	}
+	
+	
+	// -- Loops over the shapes, identify corresponding targets and connects them
+	//
+	for ($curShapeName in $shapesNames)
+	{
+		for ($j=0; $j<size($targetsName); $j++)
+		{
+			if ($curShapeName == $targetsName[$j])
+			{
+				$indexTarget = $j;
+				catch (`connectAttr ($curShapeName + ".worldMesh[0]") ($blendShapeName + ".inputTarget[0].inputTargetGroup[" + $indexTarget + "].inputTargetItem[6000].inputGeomTarget")`);
+			}
+		}
+	}
+}
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that copies the skin from a source Mesh to the desination one
+// (same bones are bound to the destination mesh - can have different topology)
+//		<< takes for arg a source and destination Mesh
+//
+//-------------------------------------------------------------------------
+
+global proc ART_copySkin (string $sourceMesh, string $destMesh)
+{
+	string $infOnMesh[];
+	string $sourceSC;
+	string $destSC[];
+	
+	
+	// gets the source mesh's influences (transforms & joints)
+	$infOnMesh = `skinCluster -q -inf $sourceMesh`;
+	
+	// skins influence objects to the destination mesh
+	$destSC = `skinCluster -tsb $infOnMesh $destMesh`;
+	
+	// do the copy skin 
+	$sourceSC = `findRelatedSkinCluster $sourceMesh`;
+	// old -- copySkinWeights -ss $sourceSC -ds $destSC[0] -noMirror;
+	copySkinWeights  -ss $sourceSC -ds $destSC[0] -noMirror -surfaceAssociation closestPoint -influenceAssociation oneToOne -influenceAssociation label -influenceAssociation closestJoint;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that deletes the bindPose and sets a new one according
+//		<< takes for arg a Joint object
+//
+//		>> returns the name of the new bindPose
+//-------------------------------------------------------------------------
+
+global proc string ART_setBindPose (string $sourceBone)
+{
+	string $bindPoseName[];
+	string $newBindPose;
+	
+	
+	$bindPoseName = `dagPose -q -bindPose -n $sourceBone`;
+	delete $bindPoseName[0];
+	$newBindPose = `dagPose -bindPose -save -n $bindPoseName[0] $sourceBone`;
+	
+	
+	return $newBindPose;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that allows to move a skinned bone without having to detach and re-attach skin
+//		<< takes for arg a Joint object
+//
+//-------------------------------------------------------------------------
+
+global proc ART_moveSkinnedBone (string $sourceBone)
+{
+	float 	$mat[16];
+	string 	$bonesList[];
+	string 	$curBone;
+	string 	$sourceSC[];			// skinClusters linked to the bone
+	string 	$bone2SkinCluster[]; 	// connections between bone and skinClusters
+	int 	$indexBone;
+	string 	$tempArray[];
+	string 	$tempArray2[];
+	
+	
+	// -- Gets the sourceBone and it's children
+	//
+	$tempArray[0]	= $sourceBone;
+	$tempArray2		= `listRelatives -ad -type joint $sourceBone`;
+	$bonesList		= `stringArrayCatenate $tempArray $tempArray2`;
+	
+	
+	for ($curBone in $bonesList)
+	{
+		// get the bone's new position and all linked skinClusters
+		$mat = `getAttr ($curBone + ".worldInverseMatrix")`;
+		$bone2SkinCluster = `listConnections -p true -s false -sh false -type skinCluster ($curBone + ".worldMatrix[0]")`;
+		 
+		 
+		// -- Modify bone's BindPose position in each skinCluster
+		//
+		for ($i=0; $i<size($bone2SkinCluster); $i++)
+		{
+			// get skinCluster's name for current connection
+			tokenize $bone2SkinCluster[$i] "." $sourceSC;
+			
+			// get Bone's index in skinCluster
+			$indexBone = `match "[0-9]+" $sourceSC[1]`;
+			
+			setAttr -type "matrix" ($sourceSC[0] + ".bindPreMatrix[" + $indexBone + "]") $mat[0] $mat[1] $mat[2] $mat[3] $mat[4] $mat[5] $mat[6] $mat[7] $mat[8] $mat[9] $mat[10] $mat[11] $mat[12] $mat[13] $mat[14] $mat[15]; 
+		}
+		
+		
+		// -- Clear all arrays...
+		clear $sourceSC;
+		clear $mat;
+		clear $bone2SkinCluster;
+	}
+	
+	
+	// -- Set the new BindPose
+	//
+	ART_setBindPose ($sourceBone);
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that bakes mesh deformation based upon bones movements
+//		<< takes for arg a Joint object
+//
+//-------------------------------------------------------------------------
+
+global proc ART_skinDeform (string $sourceBone)
+{
+	string $listBonesHierachy[];
+	string $tempArray[];
+	string $listSkinnedShapes[];
+	string $curSkinnedShape;
+	string $curParent[];
+	string $listShapeOrig[];
+	string $curShapeOrig;
+	string $tempDeformedShape[];
+	string $tempBlend[];
+	
+	
+	// -- Get all the shapes skinned to the sourceBone and to it's children Bones
+	//
+	$listBonesHierachy	= `listRelatives -ad -type joint $sourceBone`;
+	$tempArray			= ls ("-typ", "shape", (listHistory ("-future", 1, $sourceBone, $listBonesHierachy)));
+	$listSkinnedShapes	= stringArrayRemoveDuplicates($tempArray);
+	
+	
+	for ($curSkinnedShape in $listSkinnedShapes)
+	{
+		// Get the deformed skinned object's shapeOrig 
+		$curParent 		= `listRelatives -fullPath -parent -typ transform $curSkinnedShape`;
+		$listShapeOrig 	= `ls -intermediateObjects -l (listRelatives ("-s", "-pa", "-fullPath", "-type", "mesh", $curParent[0]))`;
+		
+		// Duplicate the deformed skinned object, and inject it in the shapeOrig
+		// this will bake the deformation completely
+		if (`size($listShapeOrig)` == 1)
+		{
+			$curShapeOrig 		= $listShapeOrig[0];
+			$tempDeformedShape 	= `duplicate $curSkinnedShape`;
+			
+			setAttr ( $curShapeOrig + ".io") 0;
+			
+			$tempBlend = `blendShape -n "blendSource2Dest" -tc 1 -o local -foc $tempDeformedShape[0] $curShapeOrig`;
+			setAttr ($tempBlend[0] + "." + $tempDeformedShape[0]) 1;
+			delete $tempDeformedShape;
+			delete -constructionHistory $curShapeOrig;
+			
+			setAttr ( $curShapeOrig + ".io") 1;
+		}
+		else
+		{
+			error ($curSkinnedShape + " has no / or more than one shapeOrig\n");
+		}
+	}
+	
+	
+	// -- Freeze also the bones and their BindPose
+	//
+	ART_moveSkinnedBone $sourceBone;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that creates proxy shapes that depends and inherits all deformations from selected meshes
+//		<< takes for arg a geometrical object (poly, nurbs, subdiv)
+//
+//-------------------------------------------------------------------------
+
+global proc string[] ART_proxyObj (string $sel[], int $parallel)
+{
+	string $sufix;
+	string $filtSel[];
+	string $curSel;
+	string $newName;
+	string $curType;
+	string $tempSel[];
+	string $curPar;
+	string $curProxy;
+	string $curProxyPar;
+	string $curGranPar;
+	string $outSourcePlug;
+	string $inDestPlug;
+	string $worldDestPlug;
+	string $inSourceConn[];
+	string $hasShading[];
+	string $result[];
+	
+	
+	$sufix		= "_PXY";
+	$filtSel	= ATools_listGeoShapes($sel, 0, 0);
+	
+	for ($curSel in $filtSel)
+	{
+		// -- Get the short name of $curSel and create the new name
+		//
+		$tempSel = `ls $curSel`;
+		$newName = $tempSel[0] + $sufix;
+		
+
+		// -- Create the renderObj depending on the "Parallel Option"
+		//
+		$curType 	= `nodeType $curSel`;
+		$tempSel	= `listRelatives -p -pa $curSel`;
+		$curPar		= $tempSel[0];
+		
+		// ...renderObj is in the same transform and in front of the sourceObj
+		if ( !$parallel )
+		{
+			$curProxy	= `createNode $curType -n $newName -p $curPar`;
+			$tempSel	= `ls -long $curProxy`;
+			$curProxy	= $tempSel[0];
+
+			reorder -front $curProxy;
+		}
+
+		// ...renderObj is in another transform than the sourceObj
+		else
+		{
+			$tempSel		= `listRelatives -p -pa $curPar`;
+			$curGranPar		= $tempSel[0];
+			$curProxyPar	= $curPar + $sufix;
+			
+			if ($curGranPar != "")
+				$curProxyPar = `createNode transform -parent $curGranPar -n $curProxyPar`;
+			else
+				$curProxyPar = `createNode transform -n $curProxyPar`;
+			
+			$curProxy		= `createNode $curType -n $newName -p $curProxyPar`;
+			$tempSel		= `ls -long $curProxy`;
+			$curProxy		= $tempSel[0];
+
+			reorder -front $curProxy;
+		}
+
+
+		// -- Connect with in/out connection depending on Object Type and "Parallel Option"
+		//
+		if ( `size (ls ("-typ", "nurbsCurve", $curSel))` || `size (ls ("-typ", "nurbsSurface", $curSel))` )
+		{
+			$outSourcePlug	= ".local";
+			$inDestPlug		= ".create";
+			$worldDestPlug	= ".worldSpace[0]";
+		}
+		else if ( `size (ls ("-typ", "subdiv", $curSel))` )
+		{
+			$outSourcePlug	= ".outSubdiv";
+			$inDestPlug		= ".create";
+			$worldDestPlug	= ".worldSubdiv[0]";
+		}
+		else if ( `size (ls ("-typ", "mesh", $curSel))` )
+		{
+			$outSourcePlug	= ".outMesh";
+			$inDestPlug		= ".inMesh";
+			$worldDestPlug	= ".worldMesh[0]";
+		}
+		
+		
+//		if ( !$parallel )
+//		{
+			connectAttr -f ($curSel + $outSourcePlug) ($curProxy + $inDestPlug);
+/*		}
+		else
+		{
+			$inSourceConn = `listConnections -p true -s 1 -d 0 ($curSel + $inDestPlug)`;
+
+			if (`size($inSourceConn[0])`)
+			{
+				connectAttr -f $inSourceConn[0] ($curProxy + $inDestPlug);
+			}
+			else
+			{
+				connectAttr -f ($curSel + $outSourcePlug) ($curProxy + $inDestPlug);
+				getAttr -type ($curProxy + $worldDestPlug);
+				disconnectAttr ($curSel + $outSourcePlug) ($curProxy + $inDestPlug);
+			}
+		}
+*/		
+		
+		// -- Transfer the shading assignement if there's one
+		//
+		$hasShading = `listSets -ets -object $curSel -type 1`;
+		
+		if ( size($hasShading) )
+			ART_transferObjShading $curSel $curProxy;
+		
+		
+		// -- Hide the source object only if Parallel Option is OFF
+		//
+		if ( !$parallel )
+			setAttr ($curSel + ".intermediateObject") 1;
+
+
+		$result[size($result)] = $curProxy;
+	}
+	
+	stringArrayRemoveDuplicates $result;
+	select -r $result;
+	
+	return $result;
+}
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//------------------------------     LightLink Procs    -----------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that creates LinkSets from actual lightLinking
+//
+//-------------------------------------------------------------------------
+
+global proc string ARTdoLinkSets()
+{
+	string $lightLinkers[];
+	string $lights[];
+	string $curSel;
+	string $curPar[];
+	int    $isDefault;
+	string $linkedLightLinkers[];
+	string $linkedLights[];
+	int    $nbSets;
+	string $result;
+
+	
+	// -- Get the elements
+	//
+	$lightLinkers	= `ls -type lightLinker`;
+	$lights			= `ls -typ light`;
+	$nbSets			= 0;
+	$result			= "// Number of linkSets (by pair) created : ";
+	
+	
+	for ($curSel in $lights)
+	{
+		// Does the light illuminates by default ?
+		$curPar 	= `listRelatives -p $curSel`;
+		$isDefault	= `sets -isMember "defaultLightSet" $curPar[0]`;
+
+		// Does the light have lightLinking ?
+		$linkedLightLinkers = `listConnections -type lightLinker -destination true -source false ($curSel + ".message")`;
+		$linkedLightLinkers = `stringArrayRemoveDuplicates $linkedLightLinkers`;
+
+		// Skip if the light illuminates by default AND doesn't have lightLinking
+		if ( $isDefault && !size($linkedLightLinkers) )
+			continue;
+
+
+		// Get the objects illuminated by the light
+		$linkedObjs = `lightlink -q -hierarchy false -transforms false -sets false -light $curSel`;
+
+		// Create the Sets and assign the lights/objects to them
+		$linkSetName 	= $curPar[0];
+		select -r $curPar[0] $linkedObjs;
+		ARTnewLinkSet $linkSetName;
+		select -cl;
+
+		// Remove the light from the "defaultLightSet"
+		sets -rm "defaultLightSet" $curPar[0];
+		
+		$nbSets++;
+	}
+
+
+	// -- Flush the lightLinkers and auto-link the Sets
+	//
+	ARTlightLinkerFlush;
+	ARTautoLinkSets;
+	
+	
+	$result	+= ($nbSets + "\n");
+	return $result;
+}
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that creates LinkSets from the selected objets and lights
+//		<< takes for argument the name of the Set to be created
+//
+//-------------------------------------------------------------------------
+
+global proc ARTnewLinkSet ( string $setName )
+{
+	string $selL[];
+	string $selO[];
+	string $selLights[];
+	string $selObjs[];
+	string $curSel;
+	string $tempSel[];
+	string $tempSel2;
+	string $newLightsSet;
+	string $newLightObjSet;
+	int $i;
+	int $val;
+	
+	
+	$selL	= `ls -sl -typ light -long -typ transform`;
+	$selO 	= `ls -sl -typ mesh -long -typ nurbsSurface -typ subdiv -typ transform`;
+	
+	
+	// -- Corrects the bug that disables the DefaultLightSet
+	//
+	if ( `getAttr defaultLightSet.renderableOnlySet` == 1 )
+	{
+		setAttr defaultLightSet.renderableOnlySet 0;
+		error "The DefaultLightSet is disabled, save your scene and open it back to solve the problem !";
+	}
+
+
+	// -- Check that the Sets' names doesn't already exist
+	//
+	if (`objExists ($setName + "_lights")` || `objExists ($setName + "_lightObj")`)
+	{
+		warning ("<< " + $setName + " >> LinkSet already exists, giving a new name...");
+		
+		for ($i=1; $i<20 ;$i++)
+		{
+			if (!`objExists ($setName + $i + "_lights")` && !`objExists ($setName + $i + "_lightObj")`)
+			{
+				$val = $i;
+				break;
+			}
+		}
+		
+		if ($val == 0) error ("<< " + $setName + " >> LinkSet already exists, give a new name !!");
+		
+		$newLightsSet 	= ($setName + $val + "_lights");
+		$newLightObjSet = ($setName + $val + "_lightObj");
+	}
+	else
+	{
+		$newLightsSet	= $setName + "_lights";
+		$newLightObjSet = $setName + "_lightObj";
+	}
+	
+	
+	// -- Check the selection
+	//
+	for ( $curSel in $selL )
+	{
+		if ( size(`ls -typ transform $curSel`) )
+		{
+			$tempSel  = `listRelatives -fullPath -s -ni $curSel`;
+			$tempSel2 = $tempSel[0];
+			$tempSel  = `ls -typ light -long $tempSel2`;
+			
+			// take only the lights' shapes and ignore the others
+			if ( $tempSel[0] == $tempSel2 && $tempSel[0] != "")
+			{
+				$selLights[size($selLights)] = $curSel;
+				stringArrayRemoveDuplicates $selLights;
+			}
+		}
+		else
+		{
+			$selLights[size($selLights)] = $curSel;
+			stringArrayRemoveDuplicates $selLights;
+		}
+	}
+	
+	for ( $curSel in $selO )
+	{
+		if ( size(`ls -typ transform $curSel`) )
+		{
+			$tempSel = `listRelatives -fullPath -s -ni $curSel`;
+			$tempSel = `ls -typ light -long $tempSel[0]`;
+			
+			// take only transforms that are not a light's one
+			if ( $tempSel[0] == "")
+			{
+				$selObjs[size($selObjs)] = $curSel;
+				stringArrayRemoveDuplicates $selObjs;
+			}
+		}
+		else
+		{
+			$selObjs[size($selObjs)] = $curSel;
+			stringArrayRemoveDuplicates $selObjs;
+		}
+	}
+	
+	if (!size($selLights)) warning "you selected no lights : the lights Set will be empty !!";
+	if (!size($selObjs))   warning "you selected no objects : the lightObj Set will be empty !!";
+	
+	
+	// -- Create the Sets and assign the lights/objects to them
+	//
+	$newLightsSet	= `sets -n $newLightsSet   -empty`;
+	$newLightObjSet = `sets -n $newLightObjSet -empty`;
+	
+	for ($curSel in $selLights)
+	{
+		sets -add $newLightsSet $curSel;
+	}
+	
+	for ($curSel in $selObjs)
+	{
+		sets -add $newLightObjSet $curSel;
+	}
+	
+		
+	// -- Create the lightLinking between the Sets
+	//
+	ARTautoLinkSets;
+	
+}
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that adds the selected objets to the selected Set
+//
+//-------------------------------------------------------------------------
+
+global proc string ARTaddToLinkSet()
+{
+	string $selSet[];
+	string $selL[];
+	string $selO[];
+	string $curSel;
+	string $tempSel[];
+	string $tempSel2;
+	string $result;
+	int    $count;
+	
+	$count  = 0;
+	$result = "// Objects/Lights added to current linkSet : ";
+	
+	
+	// -- Get and Check the selection
+	//
+	$selSet	= `ls -sl -long -typ objectSet`;
+	$selL	= `ls -sl -long -typ light -typ transform`;
+	$selO 	= `ls -sl -long -typ mesh -typ nurbsSurface -typ subdiv -typ transform`;
+	
+	if ( size($selSet) > 1) error "Too many sets in selection, only 1 needed";
+	
+	
+	// -- Assign lights OR objects to the Set depending on it's Type
+	//
+	if ( `gmatch $selSet[0] "*_lights"` )
+	{
+		for ($curSel in $selL)
+		{
+			if ( size(`ls -typ transform $curSel`) )
+			{
+				$tempSel  = `listRelatives -fullPath -s -ni $curSel`;
+				$tempSel2 = $tempSel[0];
+				$tempSel  = `ls -long -typ light $tempSel2`;
+				
+				// take only the lights' shapes and ignore the others
+				if ( $tempSel[0] == $tempSel2 && $tempSel[0] != "")
+				{
+					sets -add $selSet[0] $curSel;
+					$count++;
+				}
+			}
+			else
+			{
+				sets -add $selSet[0] $curSel;
+				$count++;
+			}
+		}
+	}
+	
+	else if ( `gmatch $selSet[0] "*_lightObj"` )
+	{
+		for ($curSel in $selO)
+		{
+			if ( size(`ls -typ transform $curSel`) )
+			{
+				$tempSel = `listRelatives -fullPath -s -ni $curSel`;
+				$tempSel = `ls -long -typ light $tempSel[0]`;
+				
+				// take only transforms that are not a light's one
+				if ( $tempSel[0] == "")
+				{
+					sets -add $selSet[0] $curSel;
+					$count++;
+				}
+			}
+			else
+			{
+				sets -add $selSet[0] $curSel;
+				$count++;
+			}			
+		}
+	}
+	
+	else
+	{
+		error "Select your objects/lights AND 1 linkSet !";
+	}
+	
+	
+	$result += ( $count + " \n");
+	return $result;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that removes the selected objets from the selected Set
+//
+//-------------------------------------------------------------------------
+
+global proc string ARTremoveFromLinkSet()
+{
+	string $selSet[];
+	string $selObj[];
+	string $curSel;
+	string $result;
+	int    $count;
+	
+	
+	$count = 0;
+	$result = "// Objects/Lights removed from current linkSet : ";
+
+
+	// -- Get and Check the selection
+	//
+	$selSet	= `ls -sl -typ objectSet`;
+	$selObj	= `ls -sl`;
+	
+	if ( size($selSet) > 1) error "Too many sets in selection, only 1 needed";
+	if ( !size($selSet) ) 	error "Select your objects/lights AND 1 linkSet !";
+	
+
+	// -- Remove the selected objects from the linkSet
+	//
+	for ($curSel in $selObj)
+	{
+		if (`sets -isMember $selSet[0] $curSel`)
+		{
+			sets -rm $selSet[0] $curSel;
+			$count++;
+		}
+	}
+	
+	
+	$result += ( $count + " \n");
+	return $result;
+}
+
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that autoConnects linkSets
+//
+//-------------------------------------------------------------------------
+
+global proc ARTautoLinkSets ()
+{
+	string $lightLinkers[];
+	string $lightLinker;
+	string $lightsSets[];
+	string $curLightSet;
+	string $curPrefix;
+	string $curObjSet;
+	string $linkedSets[];
+	string $curLinkedSet;
+	string $masterLinkSet;
+	string $sceneMasterLinkSet[];
+	int    $i = 0;
+	int    $stringLenght = 0;
+	
+	
+	// -- Name of the LinkSets' Root
+	//
+	$masterLinkSet = "LINKSets";
+
+
+	// -- Get the main lightLinker
+	//
+	if ( !`objExists "lightLinker1"` )
+	{
+		$lightLinkers = `ls -type lightLinker`;
+		$lightLinker = $lightLinkers[0];
+	}
+	else $lightLinker = "lightLinker1";
+
+
+	// -- Get all the lightsSets
+	//
+	$lightsSets	= `ls -type objectSet ("*_lights")`;
+
+	if ( `size($lightsSets)` == 0 )
+		error ( "No Light Set found !" );
+
+
+	// -- Link the Light Sets to the Object Sets.
+	//
+	for ( $curLightSet in $lightsSets )
+	{
+		$stringLenght = `size $curLightSet`;
+		$stringLenght = $stringLenght - 7;
+		
+		$curPrefix = `startString $curLightSet $stringLenght`;
+		
+		$curObjSet = ($curPrefix + "_lightObj");
+
+		if ( `objExists $curObjSet` && `objectType -isType objectSet $curObjSet` )
+		{
+			lightlink -make -light $curLightSet -object $curObjSet;
+			lightlink -make -shadow -light $curLightSet -object $curObjSet;
+			
+			$linkedSets[$i] 	= $curLightSet;
+			$linkedSets[$i+1] 	= $curObjSet;
+			$i += 2;
+		}
+	}
+	
+	
+	// -- Check that the master "LinkSet" exists and parent the lightLinked Sets under it
+	//
+	$sceneMasterLinkSet = `ls -type objectSet ("*"+ $masterLinkSet +"*")`;
+	
+	if ( !size($sceneMasterLinkSet) )
+		$masterLinkSet	= `sets -n $masterLinkSet -empty`;
+	else
+		$masterLinkSet	= $sceneMasterLinkSet[0];
+	
+	
+	for ( $curLinkedSet in $linkedSets )
+	{
+		sets -add $masterLinkSet $curLinkedSet;
+	}
+}
+
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that removes the selected ligths from the defaultLightSet
+// so that they don't illuminate by default
+//
+//-------------------------------------------------------------------------
+
+global proc string ARTnoIllumByDefault()
+{
+	string $selSet;
+	string $selLights[];
+	string $curSel;
+	string $result;
+	int    $count;
+	
+	
+	$count = 0;
+	$result = "// Lights removed from defaultLightSet : ";
+
+
+	// -- Get and Check the selection
+	//
+	$selSet		= "defaultLightSet";
+	$selLights	= `ls -sl`;
+	
+	if ( !size($selLights) ) error "Select at least 1 light !";
+	
+	
+	// -- Corrects the bug that disables the DefaultLightSet
+	//
+	if ( `getAttr defaultLightSet.renderableOnlySet` == 1 )
+	{
+		setAttr defaultLightSet.renderableOnlySet 0;
+		error "The DefaultLightSet is disabled, save your scene and open it back to solve the problem !";
+	}
+
+
+	// -- Remove the selected lights from the defaultLightSet
+	//
+	for ($curSel in $selLights)
+	{
+		if (`sets -isMember $selSet $curSel`)
+		{
+			sets -rm $selSet $curSel;
+			$count++;
+		}
+	}
+	
+	
+	$result += ( $count + " \n");
+	return $result;
+}
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that destroys all unneeded lightLinkers' connections 
+// from the defaultLightSet & defaultObjectSet
+//
+//-------------------------------------------------------------------------
+
+global proc string ARTlightLinkerClean()
+{
+	string $lightLinkers[];
+	string $defLightSet;
+	string $defObjectSet;
+	
+	string $defLightSetConx[];
+	string $connectedObj[];
+	string $lgtLkrObj;
+	int	   $num;
+	string $result;
+
+	
+	// -- Set the elements
+	//
+	$lightLinkers	= `ls -type lightLinker`;
+	$defLightSet 	= "defaultLightSet";
+	$defObjectSet 	= "defaultObjectSet";
+	$result			= "// Number of (unneeded) connections broken : ";
+	$num 			= 0;
+	
+	
+	// -- Gets the connections from  defaultLightSet > lightLinker
+	//
+	$defLightSetConx = `listConnections -type lightLinker -plugs true ($defLightSet + ".message")`;
+	
+	
+	// -- Breaks all the connections from  defaultLightSet & defaultObjectSet > lightLinker
+	//
+	for ($i=0; $i < size($defLightSetConx); $i++)
+	{
+		// -- Keeps the default connexion :  defaultLightSet.message > lightLinker1.link[0].light
+		//
+		if (`match "\\[0\\]" $defLightSetConx[$i]` == "")
+		{
+			// -- Gets the ".object" Attribute connection of the lightLinker (ie : lightLinker1.link[454].object)
+			//
+			$lgtLkrObj	 = `match "^.*[^\.shadowLlight]" $defLightSetConx[$i]`;
+			
+			if (`gmatch $lgtLkrObj "*shadow*"`)
+				$lgtLkrObj 	+= ".shadowObject";
+			else
+				$lgtLkrObj 	+= ".object";
+			
+			
+			$connectedObj = `listConnections -plugs false $lgtLkrObj`;
+			
+			
+			// -- Deletes unneeded connections
+			//
+			if ($connectedObj[0] == $defObjectSet)
+			{
+				disconnectAttr ($defLightSet + ".message") $defLightSetConx[$i];
+				disconnectAttr ($defObjectSet + ".message") $lgtLkrObj;
+				$num++;
+			}
+		}
+	}
+	
+	$result += ($num + "\n");
+	
+	return $result;
+	
+}	
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that destroys all lightLinkers' connections 
+// and deletes it's multi attibutes (linked and ignored)
+//
+//-------------------------------------------------------------------------
+
+global proc string ARTlightLinkerFlush ()
+{
+	string 	$lightLinkers[];
+	int		$sizeLightLinkers;
+
+	string 	$curLinkerAttr;
+	string 	$attrsToRemove1[];
+	string 	$curAttrToRemove;
+	string 	$attrsToRemove[];
+	
+	int 	$i;
+	int	    $num;
+	string  $result;
+	
+	
+	// -- Get all the lightLinkers of the scene
+	$lightLinkers		= `ls -type lightLinker`;
+	$sizeLightLinkers	= `size ( $lightLinkers )`;
+	$result				= "// Pairs of connections broken : ";
+	$num 				= 0;
+
+	
+	for ( $i=0; $i < $sizeLightLinkers; $i++ )
+	{
+		// Get all existing "link", "shadowLink" and "ignore" Attrs of the lightLinker
+		$attrsToRemove1 = listAttr ("-multi", "-leaf", $lightLinkers[$i]);
+		
+		for ($curAttrToRemove in $attrsToRemove1)
+		{
+			if (`gmatch $curAttrToRemove "link*"` ||
+				`gmatch $curAttrToRemove "ignore*"` ||
+				`gmatch $curAttrToRemove "shadowLink*"` ||
+				`gmatch $curAttrToRemove "shadowIgnore*"`
+				)
+				$attrsToRemove[size($attrsToRemove)] = $curAttrToRemove;
+		}
+		
+		// Disconnects the sources and deletes the attr from the lightLinker
+		for ( $curLinkerAttr in $attrsToRemove )
+		{
+			removeMultiInstance -b true ( $lightLinkers[$i] + "." + $curLinkerAttr );
+			$num++;
+		}
+	}
+	
+	
+	// -- Connect back the essentials
+	//
+	if ( `objExists lightLinker1` )
+	{
+		connectAttr -f defaultLightSet.message 		lightLinker1.link[0].light;
+		connectAttr -f initialShadingGroup.message  lightLinker1.link[0].object;
+		connectAttr -f defaultLightSet.message 		lightLinker1.shadowLink[0].shadowLight;
+		connectAttr -f initialShadingGroup.message  lightLinker1.shadowLink[0].shadowObject;
+		connectAttr -f defaultLightSet.message 		lightLinker1.link[1].light;
+		connectAttr -f initialParticleSE.message 	lightLinker1.link[1].object;
+		connectAttr -f defaultLightSet.message 		lightLinker1.shadowLink[1].shadowLight;
+		connectAttr -f initialParticleSE.message 	lightLinker1.shadowLink[1].shadowObject;
+	}
+	else
+	{
+		connectAttr -f defaultLightSet.message 		($lightLinkers[0] + ".link[0].light");
+		connectAttr -f initialShadingGroup.message  ($lightLinkers[0] + ".link[0].object");
+		connectAttr -f defaultLightSet.message 		($lightLinkers[0] + ".shadowObject[0].light");
+		connectAttr -f initialShadingGroup.message  ($lightLinkers[0] + ".shadowObject[0].shadowLight");
+		connectAttr -f defaultLightSet.message 		($lightLinkers[0] + ".link[1].light");
+		connectAttr -f initialParticleSE.message 	($lightLinkers[0] + ".link[1].object");
+		connectAttr -f defaultLightSet.message 		($lightLinkers[0] + ".shadowObject[1].shadowLight");
+		connectAttr -f initialParticleSE.message 	($lightLinkers[0] + ".shadowObject[1].shadowObject");
+	}
+
+
+	$result += (($num-2) + "\n");
+	
+	return $result;
+}
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc ARTpivOrigHi ()
+{
+	string $sel[];
+	int $i;
+	
+	
+	$sel = `ls -sl -type transform`;
+
+	if (!`size($sel)`)
+		error "Select at least one transform";
+
+	
+	ART_pivOrig $sel 1;
+}
+
+
+global proc ARTpivOrig ()
+{
+	string $sel[];
+	int $i;
+	
+	
+	$sel = `ls -sl -type transform`;
+
+	if (!`size($sel)`)
+		error "Select at least one transform";
+
+	
+	ART_pivOrig $sel 0;
+}
+
+global proc ARTpivCopy ()
+{
+	string $sel[];
+	
+	
+	$sel = `ls -sl -type transform`;
+
+	if (`size($sel)` != 2)
+		error "Select a source Transform then a destination one";
+
+	
+	ART_pivCopy $sel[0] $sel[1];
+}
+
+global proc ARTsnapToPiv ()
+{
+	string $sel[];
+	
+	
+	$sel = `ls -sl -type transform`;
+
+	if (`size($sel)` != 2)
+		error "Select a source Transform then a destination one";
+
+	
+	ART_snapToPiv $sel[0] $sel[1];
+}
+
+global proc ARTpivVtx ()
+{
+	string $window	 = "win_ARTBox";
+	string $b_pivVtx = ($window+"_pivVtx");
+	string $vtxNbr 	 = `textFieldButtonGrp -q -tx $b_pivVtx`;
+	string $sel[];
+	
+	
+	if ($vtxNbr == "") error "Enter a vertex number !";	
+	
+	$sel = `ls -sl -type transform`;
+
+	if (`size($sel)` == 0)
+	{
+		error "Select at least one Mesh !";
+	}
+	else
+	{
+		ART_pivVtx $sel $vtxNbr;
+	}
+}
+
+global proc ARTcleanNorm (int $mode)
+{
+	string $sel[];
+	
+	$sel = `ls -sl`;
+	ART_cleanNorm $sel $mode;
+}
+
+global proc ARTmirrorMesh ()
+{
+	string $sel[];
+	
+	$sel = `ls -sl -typ transform`;
+	ART_mirrorMesh $sel;
+}
+
+//-------------------------------------------------------------------------
+
+
+global proc ARTtransferObjShading ()
+{
+	string $sel[];
+	
+	
+	$sel = `ls -sl`;
+	$sel = ATools_listPolyShapes($sel);
+	
+	if (`size($sel)` != 2)
+		error "Select a source Mesh then a destination one";
+	
+	ART_transferObjShading $sel[0] $sel[1];
+}
+
+
+global proc ARTtransferUV (int $transfMode)
+{
+	string $sel[];
+	
+	
+	$sel = `ls -sl`;	
+	ART_transferUV $sel $transfMode;
+}
+
+//-------------------------------------------------------------------------
+
+
+global proc ARTmaterializeBS ()
+{
+	string $sel[];
+	string $selBS[];
+	string $selMatShapes[];
+	
+	
+	$sel = `ls -sl -type transform`;
+	
+	if (`size($sel)` != 1)
+		error "Select one Mesh that has a BlendShape node";
+	
+	
+	// materialize the shapes...
+	$selMatShapes	= rcpBS_recupBSSimple($sel[0], $sel[0]);
+	
+	// get the Meshe's blendShape
+	$selBS 			= rcpBS_getBS($sel[0]);
+	
+	select -r $selBS[0];
+	select -add $selMatShapes;
+}
+
+
+global proc ARTconnS2BS ()
+{
+	string $selBS[];
+	string $nameBS;
+	string $selMatShapes[];
+	
+	
+	$selBS 			= `ls -sl -type blendShape`;
+	$selMatShapes	= `ls -sl -type transform`;
+	
+	if (!`size($selBS)` || !`size($selMatShapes)`)
+		error "Select one BlendShape and the Shapes that must be connected to it !";
+		
+	
+	$nameBS = $selBS[0];
+	ART_connS2BS ($nameBS, $selMatShapes);
+}
+
+
+global proc ARTcopySkin ()
+{
+	string $sel[];
+	
+	
+	$sel = `ls -sl -type transform`;
+	
+	if (`size($sel)` != 2)
+		error "Select a source Mesh then a destination one";
+	
+	
+	ART_copySkin $sel[0] $sel[1];
+}
+
+
+global proc ARTmoveSkinnedBone ()
+{
+	string $sel[];
+	
+	
+	$sel = `ls -sl -type joint`;
+	
+	if (`size($sel)` != 1)
+		error "Select one Bone";
+	
+	
+	ART_moveSkinnedBone $sel[0];
+}
+
+
+global proc ARTskinDeform ()
+{
+	string $sel[];
+	
+	
+	$sel = `ls -sl -type joint`;
+	
+	if (`size($sel)` != 1)
+		error "Select one Bone";
+	
+	
+	ART_skinDeform $sel[0];
+}
+
+
+global proc ARTproxyObj ()
+{
+	string $sel[];
+	
+	
+	$sel = `ls -sl -type transform -type shape`;
+	
+	if (`size($sel)` == 0)
+		error "Select at least one geometrical object";
+	
+	
+	ART_proxyObj($sel, 0);
+}
+
+
+global proc ARTproxyObjP ()
+{
+	string $sel[];
+	
+	
+	$sel = `ls -sl -type transform -type shape`;
+	
+	if (`size($sel)` == 0)
+		error "Select at least one geometrical object";
+	
+	
+	ART_proxyObj($sel, 1);
+}
+
+
+//-------------------------------------------------------------------------
+
+
+global proc ARTnewLinkSet_call()
+{
+	string $window = "win_ARTBox";
+	string $b_LSName = ($window+"_LSName");
+	string $LSName = `textFieldButtonGrp -q -tx $b_LSName`;
+	
+	if ($LSName == "") error "Enter at least 1 character for the Prefix !!";
+	
+	ARTnewLinkSet $LSName;
+}
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc ARTBox()
+{
+	string $version = "v1.10";
+	string $window = "win_ARTBox";
+	
+	string $scriptAbout = "print \"// _________________________________________________________________________ \\n\"; ";
+	$scriptAbout += "print \"//  \\n\"; ";
+	$scriptAbout += "print \"// A.RT Box " + $version + " - Source : Ali \\n\"; ";
+	$scriptAbout += "print \"//  \\n\"; ";
+	$scriptAbout += "print \"// - Modeling tools for editing pivots, cleaning normals, mirroring... \\n\"; ";
+	$scriptAbout += "print \"// - Mapping tools for transfering UVs without history, transfering shaders... \\n\"; ";
+	$scriptAbout += "print \"// - Setup tools for BlendShape editing, Skin editing, Proxy objects... \\n\"; ";
+	$scriptAbout += "print \"// - Rendering tools to efficiently manage lightlinking. \\n\"; ";
+	$scriptAbout += "print \"// _________________________________________________________________________ \\n\"; ";
+	$scriptAbout += "warning \"Please open the Script Editor for information \\n\";";
+	
+
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		windowPref -remove $window;
+
+		$window = `window 	-title (" A.RT Box " + $version)
+							-topEdge $winTopEdge -leftEdge $winLeftEdge
+							-iconName " A.RT Box"
+							-toolbox false 
+							-width 260 -height 320
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title (" A.RT Box " + $version)
+							-iconName " A.RT Box"
+							-toolbox false 
+							-width 260 -height 320
+							$window`;
+	}
+	
+	
+
+	// -- Form Layout to contain window's body and the Tabs
+	//
+	string $parentFormLyt = `formLayout -numberOfDivisions 100 formLyt`;
+	
+
+	// -- Tab Layout 
+	//
+	string $mainTabLyt = `tabLayout -innerMarginWidth 5 -innerMarginHeight 5 
+							-image "smallTrash.xpm" -imageVisible true tabLyt`;
+	
+
+		// -- Modeling Tab
+		//
+		string $frameLyt01	= `frameLayout -l "" frameLyt01`;
+		
+			columnLayout -adjustableColumn 1 colLyt01;
+			
+			string $b_piv0		= `button -h 25
+									-l "Pivot 0"
+									-ann "Places pivots of selected objects at world's origin"
+									-c ("ARTpivOrig") b_piv0`;
+
+			string $b_piv0Hi	= `button -h 25
+									-l "Pivot 0 Hierarchy"
+									-ann "Places pivots of selected hierarchy at world's origin"
+									-c ("ARTpivOrigHi") b_piv0Hi`;
+
+			string $b_pivCop	= `button -h 25
+									-l "Pivot Copy"
+									-ann "Places the destination pivot like the source one"
+									-c ("ARTpivCopy") b_pivCop`;
+
+			string $b_snpPiv	= `button -h 25
+									-l "Snap to Pivot"
+									-ann "Snaps the destination object to the source object's pivot"
+									-c ("ARTsnapToPiv") b_snpPiv`;
+
+			string $b_pivVtx	= `textFieldButtonGrp
+								-l "Snap Pivot to Vtx : "
+								-ed 1
+								-bl "Ok"
+								-cw 1 130
+								-adj 2
+								-cw 3 55
+								-cat 3 "left" 5
+								-ann "Snaps the Meshe's pivot to a vertex"
+								($window+"_pivVtx")`;
+
+			textFieldButtonGrp -e -bc "ARTpivVtx" $b_pivVtx;
+			
+			string $b_cleanNorm	= `button -h 25
+									-l "Clean Normals"
+									-ann "Cleans meshes' Normals and freezes vertices"
+									-c ("ARTcleanNorm(1)") b_cleanNorm`;
+			
+			string $b_cleanKpNrm	= `button -h 25
+									-l "Clean Keep Normals"
+									-ann "Cleans meshes and freeze vertices while keeping the Normals' angles"
+									-c ("ARTcleanNorm(0)") b_cleanKpNrm`;
+			
+			string $b_mirrorMesh = `button -h 25
+									-l "Mirror Mesh"
+									-ann "Mirrors and renames selected meshes according to their pivot and in the \"X\" axe"
+									-c ("ARTmirrorMesh") b_mirrorMesh`;
+
+			setParent ..;
+    	setParent ..;
+    	
+    	
+		// -- Mapping & Shading Tab
+		//
+		string $frameLyt02	= `frameLayout -l "" frameLyt02`;
+		
+			columnLayout -adjustableColumn 1 colLyt02;
+			
+			string $b_trsfWUvs	= `button -h 25
+									-l "Transfert UV noHist -W"
+									-ann "Transfers UV in WORLD mode, from source to destination object without history modification"
+									-c ("ARTtransferUV(0)") b_trsfWUvs`;
+
+			string $b_trsfCUvs	= `button -h 25
+									-l "Transfert UV noHist -C"
+									-ann "Transfers UV in COMPONENT mode, from source to destination object without history modification"
+									-c ("ARTtransferUV(4)") b_trsfCUvs`;
+
+			string $b_trsfShad	= `button -h 25
+									-l "Transfert Shading"
+									-ann "Transfers shading from source to destination object"
+									-c ("ARTtransferObjShading") b_trsfShad`;
+			
+			setParent ..;
+    	setParent ..;
+    	
+    	
+    	// -- Setup Tab
+    	//
+		string $frameLyt03	= `frameLayout -l "" frameLyt03`;
+			
+			columnLayout -adjustableColumn 1 colLyt03;
+			
+			string $b_matShapes	= `button -h 25
+									-l "Materialize Shapes"
+									-ann "Materializes all the shapes (contained in the blendshape) of the selected Mesh"
+									-c ("ARTmaterializeBS") b_matShapes`;
+
+			string $b_connS2BS	= `button -h 25
+									-l "Connect Shapes to BS"
+									-ann "Connects back the selected Shapes to the selected BlendShape"
+									-c ("ARTconnS2BS") b_connS2BS`;
+
+			string $b_recupBS	= `button -h 25
+									-l "BS transfer Tool"
+									-ann "Transfers shapes from source to destination meshes with different topolgies"
+									-c ("ArecupBlendShape") b_recupBS`;
+
+			text -l "";
+			
+			string $b_copySkin	= `button -h 25
+									-l "Copy Skin"
+									-ann "Copies the skinning from source to destination object with different topologies (world match)"
+									-c ("ARTcopySkin") b_copySkin`;
+
+			string $b_moveBone	= `button -h 25
+									-l "Move Skinned Bone"
+									-ann "Move a bone without having to detach and re-attach the skin >>> Go to BindPose first, then move bone in local TwistAxe only and rotation."
+									-c ("ARTmoveSkinnedBone") b_moveBone`;
+
+			string $b_defrmSkin = `button -h 25
+									-l "Skin Deform"
+									-ann "Use bones to deform a mesh, then bakes it >>> Move bone in local TwistAxe only and rotation."
+									-c ("ARTskinDeform") b_defrmSkin`;
+
+			text -l "";
+			
+			string $b_proxyObj	= `button -h 25
+									-l "Proxy Object"
+									-ann "Creates a proxy shape that depends and inherits all deformations from selected mesh"
+									-c ("ARTproxyObj") b_proxyObj`;
+
+			string $b_proxyPObj	= `button -h 25
+									-l "Proxy Object - Parallel"
+									-ann "Creates a proxy shape (as a new object) that depends and inherits all deformations from selected mesh"
+									-c ("ARTproxyObjP") b_proxyPObj`;
+
+			setParent ..;
+		setParent ..;
+		
+		
+		// -- LightLink Tab
+		//
+		string $frameLyt04	= `frameLayout -l "" frameLyt04`;
+			
+			columnLayout -adjustableColumn 1 colLyt04;
+			
+			string  $b_LSName	= `textFieldButtonGrp
+								-l "New LinkSet :"
+								-ed 1
+								-bl "Ok"
+								-cw 1 100
+								-adj 2
+								-cw 3 55
+								-cat 3 "left" 5
+								($window+"_LSName")`;
+
+			textFieldButtonGrp -e -bc "ARTnewLinkSet_call" $b_LSName;
+			
+			string $b_addLS		= `button -h 25
+									-l "Add to LinkSet"
+									-ann "Adds selected objets to the selected Set"
+									-c ("ARTaddToLinkSet") b_addLS`;
+			
+			string $b_rmvLS		= `button -h 25
+									-l "Remove from LinkSet"
+									-ann "Removes selected objets from selected Set"
+									-c ("ARTremoveFromLinkSet") b_rmvLS`;
+			
+			string $b_autoLS	= `button -h 25
+									-l "Auto LinkSet"
+									-ann "Automatically connects LinkSets to lightlinker"
+									-c ("ARTautoLinkSets") b_autoLS`;
+
+			string $b_doLS		= `button -h 25
+									-l "Do LinkSets"
+									-ann "Automatically creates LinkSets from actual lightLinking"
+									-c ("ARTdoLinkSets") b_doLS`;
+			text -l "";
+			
+			string $b_noIllDef	= `button -h 25
+									-l "No illuminate by default"
+									-ann "Selected lights will NOT illuminate by default"
+									-c ("ARTnoIllumByDefault") b_noIllDef`;
+			
+			text -l "";
+			
+			string $b_LLClean	= `button -h 25
+									-l "LightLinker Clean"
+									-ann "Cleans all unneeded connections from the defaultLightSet & defaultObjectSet"
+									-c ("ARTlightLinkerClean") b_LLClean`;
+			
+			string $b_LLFlush	= `button -h 25
+									-l "LightLinker Flush"
+									-ann "Breaks all connections to all the lightLinkers"
+									-c ("ARTlightLinkerFlush") b_LLFlush`;
+			
+			setParent ..;
+		setParent ..;
+		
+
+	// -- Edits the main formLayout
+	//
+	tabLayout -edit
+		-tabLabel $frameLyt01 "Modeling"
+		-tabLabel $frameLyt02 "Map.Shad."
+		-tabLabel $frameLyt03 "Setup"
+		-tabLabel $frameLyt04 "LightLink"
+		$mainTabLyt;
+
+
+
+	// -- Edits the main formLayout
+	//
+	formLayout -edit
+		-attachForm		$mainTabLyt		"top" 	  5
+		-attachForm     $mainTabLyt		"left"	  0
+		-attachForm		$mainTabLyt		"right"   0
+		-attachForm     $mainTabLyt		"bottom"  0
+
+	$parentFormLyt;
+		
+		
+	showWindow $window;
+}
+
+
+
+
+
+global proc dlc_ARTBox ()
+{
+	ARTBox;
+}

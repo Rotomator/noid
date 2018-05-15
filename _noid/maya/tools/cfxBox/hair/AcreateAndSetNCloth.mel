@@ -1,0 +1,776 @@
+//=============================================================================
+//
+//	Create and Set nCloth	- Script that creates and setups nCloth on a given mesh with custom presets and constraints
+//							- Creates a proxy object from source mesh that will drive the nCloth
+//							- Creates new or assigns existing nucleus node to the nCloth
+//							- Sets custom presets on nCloth and/or nucleus
+//							- Constrains the selected mesh's vtx to keep them stiff and away from collisions
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.4
+//
+// Created  :    13/08/2010
+// Modified :    16/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AcreateAndSetNCloth" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that gets all local custom presets corresponding to a node type
+//		<< takes for arg a node type (ie. "nCloth" "nucleus"...)
+//
+//		>> returns the presets list
+//
+//-------------------------------------------------------------------------
+
+global proc string[] AgetUserPresets(string $nodeType)
+{
+	string $ppath;
+	string $fileList[];
+	int    $numTokens;
+	string $file;
+    string $presets[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the local path and files of all user presets corresponding to $nodeType
+	//
+	$ppath    = `internalVar -userPrefDir`;
+	$ppath    = substitute( "prefs", $ppath, "presets/attrPresets");
+	$ppath    = $ppath + $nodeType;
+	
+    $numTokens = getPresetFiles($fileList, $ppath);
+    
+	
+ 	// ------------------------------------------------------------
+   // -- Lists all presets from returned ".mel" files
+	//
+	if ($numTokens > 0 && !($numTokens == 1 && $fileList[0] == "unknown") )
+	{
+		for ( $file in $fileList )
+		{
+			if( size( match( ".mel", $file ) ) ) {
+				$presets[size($presets)] = `substitute ".mel" $file ""`;
+			}
+		}
+	}
+	
+	
+	// -- Return all matching presets
+	//
+    return $presets;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that creates a proxy, creates nCloth and setups it with constraints and given preset
+//		<< takes for arg a source object (will drive the proxy and nCloth)
+//		<< takes for arg a list of vtx/faces to constraint and keep stiff (if empty > doesn't assign constraint)
+//		<< takes for arg a nucleus node to assign to nCloth (if empty > creates a new one)
+//		<< takes for arg a custom preset to assign to nCloth (if empty > doesn't assign any preset)
+//		<< takes for arg a custom preset to assign to nucleus (if empty > doesn't assign any preset)
+//
+//		>> returns the generated nCloth node
+//
+//-------------------------------------------------------------------------
+
+global proc string A_createAndSetNCloth(string $sourceObj, string $componSel[], string $nucleusNode, string $nClothPreset, string $nucleusPreset)
+{
+	string $tempArray[];
+	string $texWinName[];
+	string $rootGrp;
+	string $proxyPar;
+	string $proxyShp;
+	string $cleanName;
+	string $sufxNum;
+	string $nCMesh;
+	string $nCNode;
+	string $nCNPar;
+	string $vtxCnstrSel[];
+	string $vtxNoCollidSel[];
+	string $noCollidCnstr[];
+	string $pnt2SurfCnstr[];
+	int    $pnt2SurfSize;
+	string $noCollidNode;
+	string $nRigidNode;
+	string $ptsNode;
+	
+	
+	// ------------------------------------------------------------
+	// -- Check arguments
+	//
+	if ( $sourceObj == "" )
+	{
+		error ("No source mesh given !");
+	}
+	else
+	{
+		$tempArray = `filterExpand -fullPath false -sm 12 $sourceObj`;
+		
+		if (!size($tempArray)) {
+			error ("Please give a POLYGONAL object as source !");
+		}
+		$sourceObj = $tempArray[0];
+	}
+	
+	if ( size($componSel) )
+	{
+		if ( size(`filterExpand -sm 31 $componSel`) || size(`filterExpand -sm 34 $componSel`) ) {
+		}
+		else {
+			warning "Please select only vtx or faces for constraint ! Currently NO constraint will be added !";
+			clear $componSel;
+		}
+	}
+	else
+	{
+		warning "No vtx or faces selected. NO constraint will be added !";
+	}
+	
+	if ($nucleusNode != "" && !`objectType -i "nucleus" $nucleusNode`)
+	{
+		error ("The object \"" + $nucleusNode + "\" is not a nucleus object !");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Close UVTexture Editor if open (really really faster!)
+	//
+	$texWinName = `getPanel -sty polyTexturePlacementPanel`;
+	// disable it if it's in embedded in a layout (like perspView)
+	removeTextureWindow $texWinName[0];
+	
+	// close it if it's a separate window
+	if ( `window -exists polyTexturePlacementPanel1Window` ) {
+		deleteUI -window polyTexturePlacementPanel1Window;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Clear the source name from namespaces, etc
+	//
+	$cleanName = `substitute "^[^.]*:" $sourceObj ""`;
+	$cleanName = `substitute "_gta" $cleanName ""`;
+	$cleanName = `substitute "_gtc" $cleanName ""`;
+	
+	// if emitter exists, get it's base name (ie. match "front" on "emitterFront_BAND3")
+	if (`gmatch $cleanName "emitter*"`)
+	{
+		$cleanName = `substitute "[emitter]*" $cleanName ""`;
+		$cleanName = `substitute "wrap_" $cleanName ""`;
+		$cleanName = `substitute "_[^_]*$" $cleanName ""`;
+		$cleanName = `substitute "_" $cleanName ""`;
+		$cleanName = `substitute "_" $cleanName ""`;
+		$cleanName = `tolower $cleanName`;
+	}
+	
+	// get emitter's number (ie. match "3" on "emitterFront_BAND3")
+	$sufxNum  = `match "[0-9]*$" $sourceObj`;
+	if ($sufxNum == "") {
+		$sufxNum = "#";
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Create proxy
+	//
+	$proxyPar = `createNode transform -n ($sourceObj + "_PXY")`;
+	$proxyShp = `createNode mesh -n ($proxyPar+"Shape") -p $proxyPar`;
+	
+	connectAttr -f ($sourceObj + ".outMesh") ($proxyShp + ".inMesh");
+	sets -e -forceElement initialShadingGroup $proxyPar;
+	
+	$rootGrp  = `createNode transform -n ($cleanName + "_nCloth_ALL" + $sufxNum)`;
+	parent $proxyPar $rootGrp;
+	
+	
+	// ------------------------------------------------------------
+	// -- Create nCloth mesh and choose nucleus node : new or append
+	//
+	$tempArray   = `duplicate -n ($cleanName + "_nMesh" + $sufxNum) $proxyPar`;
+	$nCMesh      = $tempArray[0];
+	
+	// create new nucleus node or use user specified
+	if ($nucleusNode == "")
+	{
+		select -cl;
+		$nucleusNode = `createNSystem`;
+		$nucleusNode = `rename $nucleusNode ($cleanName + "_nucleus" + $sufxNum)`;
+	}
+	else {
+		select -r $nucleusNode;
+	}
+	
+	// create nCloth in local space
+	setActiveNucleusNode $nucleusNode;
+	select -r $nCMesh;
+	$tempArray = createNCloth(0);
+	
+	// get nCloth name from returned list
+	for ($curSel in $tempArray)
+	{
+		if (`objectType -i "nCloth" $curSel`)
+		{
+			$nCNode = $curSel;
+			break;
+		}
+	}
+	
+	if ($nCNode == "") {
+		error ("No nCloth seems to be created on \"" + $nCMesh + "\" !");
+	}
+	
+	// rename nCloth node
+	$nCNode    = `rename $nCNode ($cleanName + "_nCloth" + $sufxNum + "Shape")`;
+	$tempArray = `listRelatives -p $nCNode`;
+	$nCNPar    = $tempArray[0];
+	$nCNPar    = `rename $nCNPar ($cleanName + "_nCloth" + $sufxNum)`;
+	parent $nCNPar $rootGrp;
+	
+	// assign nucleusNode to the current ncloth Mesh
+	select -r $nCMesh;
+	assignNSolver $nucleusNode;
+	
+	
+	// ------------------------------------------------------------
+	// -- Assign nCloth preset and nucleus preset
+	//
+	setAttr ($nucleusNode + ".spaceScale") 0.01;
+	
+	if ($nClothPreset != "") {
+		applyAttrPreset $nCNode $nClothPreset 1;
+	}
+	
+	if ($nucleusPreset != "") {
+		applyAttrPreset $nucleusNode $nucleusPreset 1;
+	}
+	
+	setAttr ($nucleusNode + ".startFrame") 1;
+	
+	
+	// ------------------------------------------------------------
+	// -- Disable collisions on the given vtx/faces (usually those inside the emitterMesh)
+	//
+	if ( size($componSel) )
+	{
+		// convert $sourceObj's component selection into nClothMes.vtx selection
+		if ( size(`filterExpand -sm 34 $componSel`) ) {
+			$vtxNoCollidSel = `polyListComponentConversion -ff -tv $componSel`;
+		}
+		else {
+			$vtxNoCollidSel = `polyListComponentConversion -fv -tv $componSel`;
+		}
+		
+		for ( $i=0; $i<size($vtxNoCollidSel); $i++ ) {
+			$vtxNoCollidSel[$i] = `substitute "^[^\.]*" $vtxNoCollidSel[$i] $nCMesh`;
+		}
+		
+		// disable collisions for those vtx
+		select -r $vtxNoCollidSel;
+		$noCollidCnstr = `createNConstraint disableCollision 0`;
+		
+		$noCollidNode = `rename $noCollidCnstr[0] ($cleanName + "_baseVtx_noCollid" + $sufxNum + "Shape")`;
+		$tempArray = `listRelatives -p $noCollidNode`;
+		parent $tempArray[0] $rootGrp;
+		rename $tempArray[0] ($cleanName + "_baseVtx_noCollid" + $sufxNum);
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Constraint the given vtx/faces to keep them stiff (usually at the base of the emitterMesh)
+	//
+	if ( size($componSel) )
+	{
+		// grow selection on current nClothMesh's vtx
+		select -r $vtxNoCollidSel;
+		polySelectConstraint -propagate 1 -type 0x0001;
+		$vtxCnstrSel = `ls -sl`;
+		
+		// constraint those vtx on Proxy(== goal) with pointToSurface
+		select -r $vtxCnstrSel;
+		select -add $proxyPar;
+		$pnt2SurfCnstr = `createNConstraint pointToSurface 0`;
+		$pnt2SurfSize  = `size($pnt2SurfCnstr)`;
+		
+		// rename the constraint nodes
+		for ( $i=0; $i<$pnt2SurfSize; $i++ )
+		{
+			if ( `objectType -i "dynamicConstraint" $pnt2SurfCnstr[$i]` )
+			{
+				$ptsNode = `rename $pnt2SurfCnstr[$i] ($cleanName + "_baseVtx_pts" + $sufxNum + "Shape")`;
+				$tempArray = `listRelatives -p $ptsNode`;
+				parent $tempArray[0] $rootGrp;
+				rename $tempArray[0] ($cleanName + "_baseVtx_pts" + $sufxNum);
+			}
+			else if ( `objectType -i "nRigid" $pnt2SurfCnstr[$i]` )
+			{
+				$nRigidNode = `rename $pnt2SurfCnstr[$i] ($cleanName + "_baseVtx_nRigid" + $sufxNum + "Shape")`;
+				$tempArray = `listRelatives -p $nRigidNode`;
+				parent $tempArray[0] $rootGrp;
+				rename $tempArray[0] ($cleanName + "_baseVtx_nRigid" + $sufxNum);
+			}
+		}
+		
+		// assign preset to nRigid and dynConstraint
+		setAttr ($nRigidNode + ".thickness") 0;
+		setAttr ($nRigidNode + ".pushOutRadius") 0;
+		
+		setAttr ($ptsNode + ".constraintMethod") 0;
+	}
+	
+	
+	// ------------------------------------------------------------	
+	// -- Connect Proxy to nCloth's inputMesh (do it after constraint, to avoid fail)
+	//
+	select -r $nCMesh;
+	displayNClothMesh "input";
+	connectAttr -f ($proxyShp + ".outMesh") ($nCMesh + ".inMesh");
+	displayNClothMesh "current";
+	setAttr ($proxyPar + ".visibility") 0;
+	
+	
+	// ------------------------------------------------------------	
+	// -- Return the generated and customized nCloth node
+	//
+	select -r $nCNode;
+	return $nCNode;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh
+//
+//-------------------------------------------------------------------------
+//
+global proc cASnC_getRefMesh()
+{
+	string $window 		= "win_AcreateAndSetNCloth";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $sel[];
+	
+	
+	$sel = `filterExpand -fullPath false -sm 12 (ls ("-sl"))`;
+	
+    if (!`size($sel)`)
+	{
+        error "Please select one POLYGONAL Object !";
+	}
+	
+	textFieldButtonGrp -e -tx $sel[0] $b_refMesh;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that lists all nucleus nodes and puts them in a menuList
+//
+//-------------------------------------------------------------------------
+//
+global proc cASnC_getNucNodes()
+{
+	string $window 		= "win_AcreateAndSetNCloth";
+	string $m_nuclNode	= ($window+"_nuclNode");
+	string $nucNodes[];
+	string $curMenuList[];
+	string $selectedItem;
+	
+	
+	$nucNodes = `ls -type nucleus`;
+	$curMenuList  = `optionMenuGrp -q -ils $m_nuclNode`;
+	
+    if (`size($curMenuList)`)
+	{
+		$selectedItem = `optionMenuGrp -q -v $m_nuclNode`;
+		deleteUI("-menuItem", $curMenuList);
+	}
+	
+	menuItem -parent ($m_nuclNode + "|OptionMenu") -label "Create New";
+	
+    if (`size($nucNodes)`)
+	{
+        for ($curNuc in $nucNodes)
+		{
+			menuItem -parent ($m_nuclNode + "|OptionMenu") -label $curNuc;
+		}
+		
+		if (`size($curMenuList)`) {
+			optionMenuGrp -e -v $selectedItem $m_nuclNode;
+		}
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that lists all user presets and puts them in a menuList
+//
+//-------------------------------------------------------------------------
+//
+global proc cASnC_getUserPresets(string $nodeType)
+{
+	string $window 		= "win_AcreateAndSetNCloth";
+	string $m_nClPrst  = ($window+"_nClPrst");
+	string $m_nucPrst	= ($window+"_nucPrst");
+	string $prstFiles[];
+	string $curMenuGrp;
+	string $curMenuList[];
+	string $selectedItem;
+	
+	
+	// -- Update the cloth or nucleus menu depending on the nodeType
+	//
+	if ($nodeType == "nCloth")
+	{
+		$curMenuGrp = $m_nClPrst;
+		$prstFiles  = `AgetUserPresets("nCloth")`;
+	}
+	else if ($nodeType == "nucleus")
+	{
+		$curMenuGrp = $m_nucPrst;
+		$prstFiles  = `AgetUserPresets("nucleus")`;
+	}
+	else
+	{
+		error ("Wrong nodeType given !");
+	}
+	
+	
+	// -- Do menu update...
+	//
+	$curMenuList  = `optionMenuGrp -q -ils $curMenuGrp`;
+	
+    if (`size($curMenuList)`)
+	{
+		$selectedItem = `optionMenuGrp -q -v $curMenuGrp`;
+		deleteUI("-menuItem", $curMenuList);
+	}
+	
+	menuItem -parent ($curMenuGrp + "|OptionMenu") -label "No Preset";
+	
+    if (`size($prstFiles)`)
+	{
+        for ($curPrst in $prstFiles)
+		{
+			menuItem -parent ($curMenuGrp + "|OptionMenu") -label $curPrst;
+		}
+		
+		if (`size($curMenuList)`) {
+			optionMenuGrp -e -v $selectedItem $curMenuGrp;
+		}
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that LAUNCHES the script when hitting "CREATE" button
+//
+//-------------------------------------------------------------------------
+//
+global proc cASnC_apply()
+{
+	string $window		= "win_AcreateAndSetNCloth";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $m_nuclNode	= ($window+"_nuclNode");
+	string $m_nClPrst  = ($window+"_nClPrst");
+	string $m_nucPrst	= ($window+"_nucPrst");
+	
+	string $refMesh 	= `textFieldButtonGrp -q -tx $b_refMesh`;
+	string $nuclNode	= `optionMenuGrp -q -v $m_nuclNode`;
+	string $nClPrst 	= `optionMenuGrp -q -v $m_nClPrst`;
+	string $nucPrst	 	= `optionMenuGrp -q -v $m_nucPrst`;
+	string $compSel[];
+	string $confirm;
+	
+	
+	$compSel = `ls -sl`;
+	
+	if ( $nuclNode == "Create New" ) {
+		$nuclNode = "";
+	}
+	if ( $nClPrst == "No Preset" ) {
+		$nClPrst = "";
+	}
+	if ( $nucPrst == "No Preset" ) {
+		$nucPrst = "";
+	}
+	
+	// -- Launch main proc
+	//	
+	if ( !size(`filterExpand -sm 31 -sm 34 $compSel`) )
+	{
+		$confirm = `confirmDialog -title "Warning !" -message "No Vertices/Faces are selected.\n No constraints will be added !!"
+									-button "Continue" -button "Cancel" -defaultButton "Cancel"
+									-cancelButton "Cancel" -dismissString "Cancel"`;
+	}
+	
+	if ($confirm != "Cancel")
+	{
+		print ("\/\/ CMD : A_createAndSetNCloth ({\"FirstSelection\", \"SecondSelection\", ...}, \"" + $refMesh + "\", \"" + $nuclNode + "\", \"" + $nClPrst + "\", \"" + $nucPrst + "\") \n");
+		A_createAndSetNCloth($refMesh, $compSel, $nuclNode, $nClPrst, $nucPrst);
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that calls the ABOUT window
+//
+//-------------------------------------------------------------------------
+//
+global proc AcreateAndSetNClothAbout(string $version)
+{
+	string $winAbout = "win_AcreateAndSetNCloth_about";
+
+	windowPref -enableAll false;
+
+	if (`window -exists $winAbout`)
+		deleteUI -window $winAbout;
+
+	$winAbout =`window -title "About..."
+		-iconName "About win_AcreateAndSetNCloth"
+		-toolbox true
+		-sizeable false
+		-widthHeight 300 300
+		-topEdge 256
+		-leftEdge 512
+		$winAbout`;
+
+	columnLayout -adjustableColumn true;
+
+		text -label "";
+		text -label " Script    : AcreateAndSetNCloth" -align "left";
+		text -label (" Version : "+ $version) -align "left";
+		text -label " Creator : Ali" -align "left";
+		text -label " Contact : chibi_ali@homtail.com" -align "left";
+		text -label "";
+		text -label "";
+		text -label " Features : " -align "left";
+		text -label "";
+		text -label " Creates and setups nCloth on a given mesh with custom presets and constraints" -align "left";
+		text -label "";
+		text -label " - Creates a proxy object from source mesh that will drive the nCloth" -align "left";
+		text -label " - Creates new (or assigns existing) nucleus node to the nCloth" -align "left";
+		text -label " - Sets custom presets on nCloth and/or nucleus" -align "left";
+		text -label " - Constrains the selected mesh's vtx to keep them stiff and away from collisions" -align "left";
+		text -label "";
+
+	windowPref -enableAll true;
+	showWindow $winAbout;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc AcreateAndSetNCloth()
+{
+	string $version = "v1.4";
+	string $window = "win_AcreateAndSetNCloth";
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		windowPref -remove $window;
+
+		$window = `window 	-title 		("Create & Set nCloth " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"AcreateAndSetNCloth"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title 		("Create & Set nCloth " + $version)
+							-iconName 	"AcreateAndSetNCloth"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	
+	
+
+	// -- Create a Form Layout to contain window's body
+	//
+	string $parentFrmLyt = `formLayout -numberOfDivisions 100 myFrmLyt`;
+	
+		// Create a Column Layout to contain the menu
+		//
+		string $parentCoLyt = `columnLayout -adjustableColumn true myCoLyt`;
+
+			// Create a menu for the window
+			//
+			string $menuBarLayout = `menuBarLayout`;
+			setParent ..;
+
+			//separator -height 10 -style "none";
+		
+		setParent ..;
+		
+		
+		// Body layout
+		//
+		//string $bodyLyt = `columnLayout -adjustableColumn true exCoLyt01`;
+		string $bodyLyt = `scrollLayout -w 420 -h 200 bodyLyt01`;
+		
+			// Fields
+			separator -height 10 -style "none";
+			
+			string $b_refMesh = `textFieldButtonGrp
+								-l "Source Mesh"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "The source object that will drive the proxy and nCloth"
+								-bc "cASnC_getRefMesh"
+								($window+"_refMesh")`;
+
+			separator -height 10 -style "none";
+			
+			string $m_nuclNode = `optionMenuGrp
+								-l "Nucleus Node"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-ann "Create a new nucleus node or assign existing one to nCloth"
+								-cc "cASnC_getNucNodes"
+								($window+"_nuclNode")`;
+								
+			cASnC_getNucNodes();
+			
+			separator -height 10 -style "none";
+			
+			string $m_nClPrst  = `optionMenuGrp
+								-l "nCloth Preset"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-ann "A custom preset to assign to nCloth"
+								-cc "cASnC_getUserPresets(\"nCloth\")"
+								($window+"_nClPrst")`;
+								
+			cASnC_getUserPresets("nCloth");
+			
+			string $m_nucPrst  = `optionMenuGrp
+								-l "Nucleus Preset"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-ann "A custom preset to assign to nucleus"
+								-cc "cASnC_getUserPresets(\"nucleus\")"
+								($window+"_nucPrst")`;
+								
+			cASnC_getUserPresets("nucleus");
+			
+		setParent ..;
+		
+		
+		// Buttons
+		//
+		string $b_create = `button -label "Create" -w 150 -command "cASnC_apply" ($window+"_create")`;
+		
+		string $b_close = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close")`;
+
+	setParent ..;
+	
+	
+	
+	// -- Edits the MAIN FORM layout
+	//
+	formLayout -edit
+		-attachForm     $parentCoLyt	"top"     0
+		-attachForm     $parentCoLyt	"left"    0
+		-attachForm     $parentCoLyt	"right"   0
+		
+		-attachControl  $bodyLyt		"top" 	  0 $parentCoLyt
+		-attachForm     $bodyLyt		"left"    5
+		-attachForm     $bodyLyt		"right"   5
+		-attachControl	 $bodyLyt		"bottom"  5 $b_create
+		
+		-attachNone		 $b_create    	"top" 	  
+		-attachForm     $b_create	    "left"    5
+		-attachPosition $b_create	    "right"   5 50
+		-attachForm     $b_create	    "bottom"  5
+		
+		-attachNone		 $b_close    	"top" 	  
+		-attachPosition $b_close	    "left"    5 50
+		-attachForm     $b_close	    "right"   5
+		-attachForm     $b_close	    "bottom"  5
+		
+	$parentFrmLyt;
+	
+	
+	// -- Edits the window's menu
+	//
+	setParent $menuBarLayout;
+		menu -label "Help" -helpMenu true;
+			menuItem -label "About..." -c ("AcreateAndSetNClothAbout \"" + $version + "\"") helpMit;
+	
+	
+	// -- Launch the window
+	//
+	showWindow $window;
+}
+

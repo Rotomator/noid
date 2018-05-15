@@ -1,0 +1,43 @@
+		// -- Create a follicule on the vtx corresponding to the curve's base
+		//
+		$matchVtx    = `getAttr ($fixCurv + ".closestVtx")`;
+		// Get only the vertex ID (ie. "1383" from "emitterFront_wrap.vtx[1383]") 
+		$matchVtxID  = `substitute "^[^[]*\\[" $matchVtx ""`;
+		$matchVtxID  = `substitute "\\].*" $matchVtxID ""`;
+		$tempArray   = `polyListComponentConversion -fv -tuv $matchVtx`;
+		$matchVtxUVs = `polyEditUV -q $tempArray[0]`;
+		
+		string $fol  = `createNode transform -p $folcGrp -n ("fol_"+ $refObjCleanName +"_v"+ $matchVtxID)`;
+		string $folS = `createNode follicle -p $fol -n ($fol + "Shape")`;
+		
+		connectAttr -f ($refObj + ".worldMatrix[0]") ($folS + ".inputWorldMatrix");
+		connectAttr -f ($refObj + ".worldMesh[0]") ($folS + ".inputMesh");
+		connectAttr -f ($folS + ".outRotate") ($fol + ".rotate");
+		connectAttr -f ($folS + ".outTranslate") ($fol + ".translate");
+		
+		setAttr ($folS + ".parameterU") $matchVtxUVs[0];
+		setAttr ($folS + ".parameterV") $matchVtxUVs[1];
+
+		
+		connectAttr -f "fol_test_v137Shape.worldInverseMatrix[0]" "cluster1.bindPreMatrix"
+
+		// dans maya 2011 utiliser le parentInverseMatrix au lieu du worldInverseMatrix ???
+		
+		
+		
+		// pour regler le prob de cycle 2 solutions :
+		
+		// 1)
+		// - utiliser un patch contraint sur l'objet source
+		// - le patch recoit la follicule
+		// - l'objet source recoit le cluster
+		// - fol.matrix > cluster.bpm
+		// - il n'y a plus de prob de cylce
+		
+		// 2)
+		// - si l'objet source a un geoCache
+		// - creer un dupli qui recoit le meme cache + la follicule
+		// - l'objet source recoit le cluster
+		// - fol.matrix > cluster.bpm
+		// - il n'y a plus de prob de cylce
+

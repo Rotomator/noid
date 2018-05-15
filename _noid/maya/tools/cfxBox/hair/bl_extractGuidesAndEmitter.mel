@@ -1,0 +1,71 @@
+global proc bl_extractGuidesAndEmitter()
+{
+	string $surfaces[];
+	string $combOrder;
+	string $tempArray[];
+	string $emitterList[];
+	string $combEmitter;
+	
+	
+	
+	// Get all nurbsSurfaces from selection or hierachy
+	$surfaces = `filterExpand -fullPath false -sm 10 (ls ("-sl") )`;
+	$surfaces = `ls -visible $surfaces`;
+	
+    if (!`size($surfaces)`)
+	{
+        error "Please select at least one visible NURBS surface !";
+	}
+	
+	
+	for ($surface in $surfaces)
+	{
+		string $curveList[] = {}; //--- on va stocker les isoparms dans cette variable
+		int $whichIso = 0;	//--- on veut les V isoparm de la surface
+
+		selectVisibleIsoparms({$surface}, $curveList, 0, 1, 1);
+
+		select -r $curveList;
+		DuplicateCurve;
+
+		string $curves[] = sort(`ls -dag -sl -type "nurbsCurve"`);
+
+		//--- la on cree le emitter en poly 
+		string $cmd = "polyCreateFacet -ch off -tx 1 -s 1";
+
+		string $curves[] = sort(`ls -dag -type "nurbsCurve" -sl`);
+
+		for ($i=0;$i<size($curves);$i++)
+		{
+			float $cv0pos[] = `pointPosition -w ($curves[$i]+ ".cv[0]")`;
+			$cmd += (" -p " + $cv0pos[0] + " " + $cv0pos[1]+ " " + $cv0pos[2]);
+		}
+		string $emitter[] = `eval $cmd`;
+		polyTriangulate $emitter[0];
+		
+		// Get the list of all nurbs tubes and their selection order
+		$emitterList[size($emitterList)] = $emitter[0];
+		$combOrder += ($surface + " ");
+	}
+	
+	
+	// -- Combine all the emitters into one mesh (in case of multi selection)
+	//
+	if (`size($surfaces)` != 1)
+	{
+		$tempArray = `polyUnite -n "leavesEmitter" -ch 0 $emitterList`;
+		$combEmitter = $tempArray[0];
+		setAttr ($combEmitter + ".doubleSided") 0;
+	}
+	else {
+		$combEmitter = $emitterList[0];
+	}
+	
+	
+	// -- Add an extra Attribute to the resulting mesh 
+	//   it will contain the ordered list of nurbs tubes that generated the poly emitters
+	//
+	addAttr -ln "combineOrder" -dt "string" $combEmitter;
+	setAttr -type "string" ($combEmitter + ".combineOrder") $combOrder;
+	setAttr -lock on ($combEmitter + ".combineOrder");
+}

@@ -1,0 +1,152 @@
+//=============================================================================
+//
+//	Set From InitMesh		- Script that sets nCloth initial state from each "initMesh" objects
+//							- Gets all "initMesh" objects in the scene
+//							- Gets corresponding "nMesh" objects
+//							- Sets nMesh initial state from initMesh
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.2
+//
+// Created  :    07/09/2010
+// Modified :    10/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AsetFromInitMesh" to launch the script
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that sets nCloth initial state from each "initMesh" objects
+//
+//		>> returns the list of all "initMesh" objects
+//
+//-------------------------------------------------------------------------
+
+global proc string[] AsetFromInitMesh()
+{
+	string $initMeshL[];
+	string $curInitMesh;
+	string $curNMesh;
+	string $curNCloth;
+	string $curNMeshPar[];
+	string $allPars[];
+	string $curPar;
+	string $result[];
+	
+	
+	// ------------------------------------------------------------
+	// Set nCloth start frame
+	
+	
+	// ------------------------------------------------------------
+	// -- Get all "initMesh" objects
+	//
+	$initMeshL = `ls -type transform -recursive on "*_initMsh*" "*:*_initMsh*"`;
+	
+	
+	for ($curInitMesh in $initMeshL)
+	{
+		// ------------------------------------------------------------
+		// -- Get the "nMesh" from current "ini_msh"
+		//
+		$curNMesh  = `substitute "_init_msh" $curInitMesh "_nMsh"`;
+		$curNCloth = `substitute "_init msh" $curInitMesh "_nCloth"`;
+		
+		if (!`objExists $curNMesh`)
+		{
+			warning ("Their seems to be no nMesh matching \"" + $curInitMesh + "\" object ! Skipping...");
+			continue;
+		}
+		if (!`objExists $curNCloth`)
+		{
+			warning ("Their seems to be no nCloth matching \"" + $curInitMesh + "\" object ! Skipping...");
+			continue;
+		}
+		
+		
+		// ------------------------------------------------------------
+		// -- Make the nMesh visible
+		//
+		if (`referenceQuery -isNodeReferenced $curNMesh`)
+		{
+			if (`getAttr -l ($curNMesh + ".visibility")`) {
+				warning ("nMesh \""+ $curNMesh +"\" must be visible to set initialState ! Visibility is locked, Skipping...");
+			}
+		}
+		else {
+			setAttr -l off ($curNMesh + ".visibility");
+		}
+		
+		setAttr ($curNMesh + ".visibility") 1;
+		
+		
+		// ------------------------------------------------------------
+		// -- Make all the nMesh's parents visible
+		//
+		$curNMeshPar = `listRelatives -ap -f $curNMesh`;
+		tokenize $curNMeshPar[0] "|" $allPars;
+		
+		for ($curPar in $allPars)
+		{
+			if (`referenceQuery -isNodeReferenced $curPar`)
+			{
+				if (`getAttr -l ($curPar + ".visibility")`) {
+					warning ("Object \""+ $curPar +"\" must be visible to set initialState on nMesh ! Visibility is locked, Skipping...");
+				}
+			}
+			else {
+				setAttr -l off ($curPar + ".visibility");
+			}
+			
+			setAttr ($curPar + ".visibility") 1;
+		}
+		
+		
+		// ------------------------------------------------------------
+		// -- Clear initial state of selected "nMesh"
+		//
+		select -r $curNMesh;
+		clearNClothStartState;
+		
+		
+		// ------------------------------------------------------------
+		// -- Set initial state of selected "nCloth" from selected "initMesh"
+		//
+		select -r $curNCloth;
+		select -add $curInitMesh;
+		SetNClothStartFromMesh;
+		
+		
+		$result[size($result)] = $curInitMesh;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all "initMesh" objects
+	//
+	select -r $result;
+	return $result;
+}

@@ -1,0 +1,26 @@
+global proc create_nGroup()
+{
+if (`objExists "dynRigAll"`<1){
+group -empty -name dynRigAll;
+}
+if (`objExists "collid_all"`<1){
+group -empty -name collid_all -p dynRigAll;
+}
+if (`objExists "bands_all"`<1){
+group -empty -name bands_all -p dynRigAll;
+}
+if (`objExists "cloth_all"`<1){
+group -empty -name cloth_all -p dynRigAll;
+}
+if (`objExists "initMesh_all"`<1){
+group -empty -name initMesh_all -p dynRigAll;
+}
+if (`objExists "loToHi_all"`<1){
+group -empty -name loToHi_all -p dynRigAll;
+}
+if (`objExists "cloth_all"`<1){
+group -empty -name cloth_all -p dynRigAll;
+}
+parent -w collid_all bands_all cloth_all initMesh_all loToHi_all;
+parent -r collid_all bands_all cloth_all initMesh_all loToHi_all dynRigAll;
+}

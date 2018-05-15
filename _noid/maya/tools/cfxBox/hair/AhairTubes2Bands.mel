@@ -1,0 +1,904 @@
+//=============================================================================
+//
+//	HairTubes 2 Bands	- Script that converts selected Nurbs or Poly TUBES to Poly BANDS
+//						- Lofts the final surface from 2 reference isoparms/edges coordinates
+//						- Extends the surface to have one extra face inside the skin
+//						- Definition of resulting mesh (polyBANDS) can be customized
+//						- Use a reference mesh to ensure resulting normals are well directed
+//						- Keeps the initial Nurbs or Poly TUBES selection order in an ExtraAttribute
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.5
+//
+// Created  :    29/07/2010
+// Modified :    02/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AhairTubes2Bands" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that rounds a float value
+//		<< takes for arg the float value
+//		<< takes for arg the wanted number of decimals (ie. 3 = 0.451)
+//
+//		>> returns the rounded value
+//
+//-------------------------------------------------------------------------
+
+global proc float hT2B_round(float $val,float $dec)
+{
+	$sign = `sign $val`;
+	float $dec = `pow 10 $dec`;
+	$val = (int) (($val + $sign*5/($dec*10)) * $dec);
+	$val = ($val / $dec);
+	
+	return $val;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that gives the V coordinate of selected isoparm
+//
+//		>> returns the isoparm's V coordinate
+//
+//-------------------------------------------------------------------------
+
+global proc float hT2B_getIsoparmVCoord()
+{
+	string $sel[];
+	float $isprmVal;
+	
+	
+	// Get isoparm from selection
+	$sel = `filterExpand -fullPath false -sm 45 (ls ("-sl"))`;
+	
+	
+	// Check selection
+	if (!`size($sel)`)
+	{
+		error ("Please select one NURBS isoparm !");
+	}
+	else if (`size($sel)` > 1)
+	{
+		warning ("Only the first isoparm will be returned !");
+	}
+	if (!`gmatch $sel[0] "*.v[[]*"`)
+	{
+		error ("Please select a \"V\" isoparm !");
+	}
+	
+	
+	// Keep only isoparm's coordinate
+	$sel[0] = `substitute "^[^[]*\\[" $sel[0] ""`;
+	$sel[0] = `substitute "\\].*" $sel[0] ""`;
+	$isprmVal = hT2B_round($sel[0], 3);
+	
+	
+	// Return the value
+	return $isprmVal;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that gives the edge coordinate of selected edge
+//
+//		>> returns the edge's coordinate
+//
+//-------------------------------------------------------------------------
+
+global proc int hT2B_getEdgeCoord()
+{
+	string $sel[];
+	int    $edgCoord;
+	
+	
+	// Get isoparm from selection
+	$sel = `filterExpand -fullPath false -sm 32 (ls ("-sl"))`;
+	
+	
+	// Check selection
+	if (!`size($sel)`)
+	{
+		error ("Please select one POLY Edge !");
+	}
+	else if (`size($sel)` > 1)
+	{
+		warning ("Only the first edge will be returned !");
+	}
+	if (!`gmatch $sel[0] "*.e[[]*"`)
+	{
+		error ("Please select one POLY Edge !");
+	}
+	
+	
+	// Keep only isoparm's coordinate
+	$sel[0] = `substitute "^[^[]*\\[" $sel[0] ""`;
+	$sel[0] = `substitute "\\].*" $sel[0] ""`;
+	$edgCoord = $sel[0];
+	
+	
+	// Return the value
+	return $edgCoord;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that compares 2 normals directions
+//		<< takes for arg a polyObject which normals serves as reference
+//		<< takes for arg a polyObject (to check its normals)
+//
+//		>> returns a float value (dotProduct of both surface normals)
+//		   POSITIVE = normals in SAME direction
+//		   NEGATIVE = normals in OPPOSITE direction
+//
+//-------------------------------------------------------------------------
+
+global proc float hT2B_compareNormalsDir(string $refObj, string $loftPoly)
+{
+	string $test1[];
+	string $test2[];
+	string $closestPOM;
+	string $vtxNum;
+	float  $vtxPos[];
+	int    $closestVtxOnRef;
+	float  $normVtxBandA[];
+	float  $normVtxRefA[];
+	float  $normVtxBandB[3];
+	float  $normVtxRefB[3];
+	float  $dotProd[];
+	float  $dotProdAvrg = 0.0;
+	
+	
+	// ------------------------------------------------------------
+	// -- Check arguments
+	//
+	$test1 = `filterExpand -sm 12 $loftPoly`;
+	$test2 = `filterExpand -sm 12 $refObj`;
+	
+	if ( !size($test1) || !size($test2) )
+	{
+		error ("Please give POLYGON objects to compare normals !");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Create closestPointOnMesh and connect $refObj as reference object
+	//
+	$closestPOM = createNode("closestPointOnMesh");
+	connectAttr -f ($refObj + ".outMesh") ($closestPOM + ".inMesh");
+	
+	
+	// ------------------------------------------------------------
+	// -- Get multiple normal values (for vtx[0], vtx[5], vtx[10] ... to vtx[30])
+	//
+	for ($i=0; $i<7; $i++)
+	{
+		$vtxNum = ($i*5);
+		
+		// -- Get $loftPoly's vtx position and get its closest point on $refObj
+		//
+		$vtxPos = `xform -q -ws -t ($loftPoly + ".vtx["+$vtxNum+"]")`;
+		setAttr ($closestPOM + ".inPosition") $vtxPos[0] $vtxPos[1] $vtxPos[2];
+		$closestVtxOnRef = `getAttr ($closestPOM + ".closestVertexIndex")`;
+		//select -r ($refObj + ".vtx["+$closestVtxOnRef+"]");
+		
+		
+		// -- Get the cross product of the 2 vtx's normals
+		//    >> positive value = same direction
+		//
+		$normVtxBandA = `polyNormalPerVertex -q -normalXYZ ($loftPoly + ".vtx["+$vtxNum+"]")`;
+		$normVtxRefA  = `polyNormalPerVertex -q -normalXYZ ($refObj + ".vtx["+$closestVtxOnRef+"]")`;
+		
+		$normVtxBandB[0] = $normVtxBandA[0];
+		$normVtxBandB[1] = $normVtxBandA[1];
+		$normVtxBandB[2] = $normVtxBandA[2];
+		$normVtxRefB[0]  = $normVtxRefA[0];
+		$normVtxRefB[1]  = $normVtxRefA[1];
+		$normVtxRefB[2]  = $normVtxRefA[2];
+		
+		$dotProd[size($dotProd)] = `dotProduct $normVtxBandB $normVtxRefB 0`;
+		
+		//print ("vtxNumb : " +$vtxNum + " | dotProduct : " + $dotProd[$i] + "\n");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Make an average of the different resulting dotProducts
+	//
+	for ($i=0; $i<size($dotProd); $i++)
+	{
+		$dotProdAvrg += $dotProd[$i];
+	}
+	
+	$dotProdAvrg = $dotProdAvrg/(size($dotProd));
+	
+	
+	// ------------------------------------------------------------
+	// -- Return the averaged dot product
+	//
+	delete $closestPOM;
+	return $dotProdAvrg;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that converts nurbs/poly tubes to poly bands
+//		<< takes for arg the list of the tubes to be converted
+//		<< takes for arg the 1st isoparm's V coordinate
+//		<< takes for arg the 2cd isoparm's V coordinate
+//		<< takes for arg the number of V spans that will define the resulting mesh (the band)
+//		<< takes for arg the object that serves as reference for normals direction
+//
+//		>> returns the resulting generated mesh
+//
+//-------------------------------------------------------------------------
+
+global proc string A_hairTubes2Bands(string $tubeSel[], float $isprmV1, float $isprmV2, int $numOfSpans, string $refObj)
+{
+	string $sel[];
+	string $selType;
+	string $test1[];
+	string $texWinName[];
+	string $tmpRefUVBand;
+	string $tempArray[];
+	string $isoCurvRef1;
+	string $isoCurvRef2;
+	string $isoCurv1;
+	string $isoCurv2;
+	float  $curvArcLen;
+	string $loftNurbs;
+	string $isoOffCurv1;
+	string $isoOffCurv2;
+	string $loftPoly;
+	string $loftPolyList[];
+	float  $normalsDir;
+	string $combOrder;
+	string $result;
+	
+	
+	// ------------------------------------------------------------
+	// -- Get all nurbsSurfaces from selection or hierachy
+	//
+    if (!`size($tubeSel)`)
+	{
+        error "Please select at least one NURBS/Poly surface to convert !";
+	}
+	else
+	{
+		$sel = `filterExpand -fullPath false -sm 10 $tubeSel`;
+		$sel = `ls -visible $sel`;
+		$selType = "nurbs";
+		
+		if (!`size($sel)`)
+		{
+			$sel = `filterExpand -fullPath false -sm 12 $tubeSel`;
+			$sel = `ls -visible $sel`;
+			$selType = "poly";
+			
+			if (!`size($sel)`)
+			{
+				error "Please select at least one visible NURBS/Poly surface to convert !";
+			}
+		}
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Check arguments
+	//
+	if ( $refObj == "" )
+	{
+		warning ("No Reference mesh given >> CHECK the resulting mesh normals !!");
+	}
+	else
+	{
+		$test1 = `filterExpand -sm 12 $refObj`;
+		
+		if (!size($test1)) {
+			error ("The Reference mesh must be a POLYGONAL object !");
+		}
+	}
+	
+	if ( !$isprmV1 || !$isprmV2 || !$numOfSpans )
+	{
+		error ("Please give non zero values for Isoparms coordinates and Spans numbers !");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Close UVTexture Editor if open (really really faster!)
+	//
+	$texWinName = `getPanel -sty polyTexturePlacementPanel`;
+	// disable it if it's in embedded in a layout (like perspView)
+	removeTextureWindow $texWinName[0];
+	
+	// close it if it's a separate window
+	if ( `window -exists polyTexturePlacementPanel1Window` ) {
+		deleteUI -window polyTexturePlacementPanel1Window;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Create a temp poly BAND that will serve as reference to all poly BADNS' UVs
+	//
+	if ($selType == "poly")
+	{
+		polySelect -edgeLoop $isprmV1 $sel[0];
+		$tempArray = `polyToCurve -n ($sel[0] + "_isoRef1") -form 2 -degree 1 -ch off`;
+		$tempArray = `rebuildCurve -spans ($numOfSpans+1) -ch 0 -replaceOriginal 1 -rt 0 -end 1 -kr 1 -kcp 0 -kep 1 -kt 1 -d 3 -tol 0.05 $tempArray[0]`;
+		$isoCurvRef1 = $tempArray[0];
+		
+		polySelect -edgeLoop $isprmV2 $sel[0];
+		$tempArray = `polyToCurve -n ($sel[0] + "_isoRef2") -form 2 -degree 1 -ch off`;
+		$tempArray = `rebuildCurve -spans ($numOfSpans+1) -ch 0 -replaceOriginal 1 -rt 0 -end 1 -kr 1 -kcp 0 -kep 1 -kt 1 -d 3 -tol 0.05 $tempArray[0]`;
+		$isoCurvRef2 = $tempArray[0];
+	}
+	else
+	{
+		$tempArray = `duplicateCurve -n ($sel[0] + "_isoRef1") -ch 0 -range 0 -local 0 ($sel[0]+".v["+$isprmV1+"]")`;
+		$tempArray = `rebuildCurve -spans ($numOfSpans+1) -ch 0 -replaceOriginal 1 -rt 0 -end 1 -kr 1 -kcp 0 -kep 1 -kt 1 -d 3 -tol 0.05 $tempArray[0]`;
+		$isoCurvRef1 = $tempArray[0];
+		
+		$tempArray = `duplicateCurve -n ($sel[0] + "_isoRef2") -ch 0 -range 0 -local 0 ($sel[0]+".v["+$isprmV2+"]")`;
+		$tempArray = `rebuildCurve -spans ($numOfSpans+1) -ch 0 -replaceOriginal 1 -rt 0 -end 1 -kr 1 -kcp 0 -kep 1 -kt 1 -d 3 -tol 0.05 $tempArray[0]`;
+		$isoCurvRef2 = $tempArray[0];
+	}
+	
+	// Set nurbs2poly conversion options to "general" "quad" and 1 U/V "per span# of iso params"
+	nurbsToPolygonsPref -f 2 -polyType 1 -uType 3 -vType 3 -uNumber 1 -vNumber 1 -useChordHeight 0 -ucr 0 -mrt 0 -es 0;
+	
+	$tempArray = `loft -n ($sel[0] + "_polyLoftRef") -polygon 1 -degree 1 -ch 0 -u 1 -c 0 -ar 1 -ss 1 -rn 0 -rsn true $isoCurvRef1 $isoCurvRef2`;
+	$tmpRefUVBand = $tempArray[0];
+	delete $isoCurvRef1 $isoCurvRef2;
+	
+	
+	// ------------------------------------------------------------
+	// -- Create a BAND for each Nurbs TUBE
+	//
+	for ($curSel in $sel)
+	{
+		// Create 2 curves from nurbsTube's isoparm coordinates
+		if ($selType == "poly")
+		{
+			polySelect -edgeLoop $isprmV1 $curSel;
+			$tempArray = `polyToCurve -n ($curSel + "_iso1") -form 2 -degree 1 -ch off`;
+			$isoCurv1  = $tempArray[0];
+			
+			polySelect -edgeLoop $isprmV2 $curSel;
+			$tempArray = `polyToCurve -n ($curSel + "_iso2") -form 2 -degree 1 -ch off`;
+			$isoCurv2  = $tempArray[0];
+		}
+		else
+		{
+			$tempArray = `duplicateCurve -n ($curSel + "_iso1") -ch 0 -range 0 -local 0 ($curSel+".v["+$isprmV1+"]")`;
+			$isoCurv1  = $tempArray[0];
+			
+			$tempArray = `duplicateCurve -n ($curSel + "_iso2") -ch 0 -range 0 -local 0 ($curSel+".v["+$isprmV2+"]")`;
+			$isoCurv2 = $tempArray[0];
+		}
+		
+		$tempArray = `rebuildCurve -spans $numOfSpans -ch 0 -replaceOriginal 1 -rt 0 -end 1 -kr 1 -kcp 0 -kep 1 -kt 1 -d 3 -tol 0.05 $isoCurv1`;
+		$isoCurv1 = $tempArray[0];
+		
+		$tempArray = `rebuildCurve -spans $numOfSpans -ch 0 -replaceOriginal 1 -rt 0 -end 1 -kr 1 -kcp 0 -kep 1 -kt 1 -d 3 -tol 0.05 $isoCurv2`;
+		$isoCurv2 = $tempArray[0];
+		
+		
+		// Extend the curves with the same distance as the one between 2 Points
+		$curvArcLen = `arclen -ch 0 $isoCurv1`;
+		$curvArcLen = $curvArcLen / $numOfSpans;
+		$curvArcLen = hT2B_round($curvArcLen, 2);
+		
+		$tempArray = `extendCurve -cos 0 -ch 0 -em 0 -et 0 -d $curvArcLen -s 1 -jn false -rpo false $isoCurv1`;
+		$tempArray = `attachCurve -ch 0 -rpo true -kmk true -method 0 $tempArray[0] $isoCurv1`;
+		delete $isoCurv1;
+		$isoCurv1  = $tempArray[0];
+		
+		$tempArray = `extendCurve -cos 0 -ch 0 -em 0 -et 0 -d $curvArcLen -s 1 -jn false -rpo false $isoCurv2`;
+		$tempArray = `attachCurve -ch 0 -rpo true -kmk true -method 0 $tempArray[0] $isoCurv2`;
+		delete $isoCurv2;
+		$isoCurv2  = $tempArray[0];
+		
+		
+		// Loft a nurbsPlane from the 2 curves
+		$tempArray = `loft -n ($curSel + "_loft") -ch 0 -u 1 -c 0 -ar 1 -d 3 -ss 1 -rn 0 -polygon 0 -rsn true $isoCurv1 $isoCurv2`;
+		$loftNurbs = $tempArray[0];
+		
+		// Re-create 2 curves offseted by -10% to avoid future interpenetrations
+		$tempArray = `duplicateCurve -n ($curSel + "_isoOff1") -ch 0 -range 0 -local 0 ($loftNurbs+".v[0.1]")`;
+		$isoOffCurv1 = $tempArray[0];
+		
+		$tempArray = `duplicateCurve -n ($curSel + "_isoOff2") -ch 0 -range 0 -local 0 ($loftNurbs+".v[0.9]")`;
+		$isoOffCurv2 = $tempArray[0];
+		
+		
+		// Set nurbs2poly conversion options to "general" "quad" and 1 U/V "per span# of iso params"
+		nurbsToPolygonsPref -f 2 -polyType 1 -uType 3 -vType 3 -uNumber 1 -vNumber 1 -useChordHeight 0 -ucr 0 -mrt 0 -es 0;
+		
+		// Loft the final polyPlane from the 2 offseted curves
+		$tempArray = `loft -n ($curSel + "_polyLoft") -polygon 1 -degree 1 -ch 0 -u 1 -c 0 -ar 1 -ss 1 -rn 0 -rsn true $isoOffCurv1 $isoOffCurv2`;
+		$loftPoly = $tempArray[0];
+		
+		// Cleanup
+		delete $isoCurv1 $isoCurv2 $loftNurbs $isoOffCurv1 $isoOffCurv2;
+		
+		// Get UVs from $tmpRefUVBand and Rotate + scale them
+		setToolTo selectSuperContext; // to avoid warnings when selecting UVs
+		transferAttributes -pos 0 -nml 0 -uvs 2 -col 2 -spa 4 -sus "map1" -tus "map1" -flipUVs 0 -clb 1 $tmpRefUVBand $loftPoly;
+		delete -ch $loftPoly;
+		
+		select -r ($loftPoly + ".map[*]");
+		polyRotateUVs -90 1;
+		polyEditUV -pu 0.5 -pv 0.5 -su 0.90 -sv 0.90; // to avoid unwanted color wraps on borders
+		select -cl;
+		setAttr ($loftPoly + ".doubleSided") 0;
+		
+		// Reverse object normals if they aren't in the same direction as REFERENCE object
+		if ($refObj != "")
+		{
+			$normalsDir = `hT2B_compareNormalsDir $refObj $loftPoly`;
+			
+			if ($normalsDir < 0) {
+				polyNormal -nm 4 -ch 0 $loftPoly;
+			}
+		}
+		
+		// Get the list of all lofted poly bands and selection order
+		$loftPolyList[size($loftPolyList)] = $loftPoly;
+		$combOrder += ($curSel + " ");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Delete the temp polyBAND
+	//
+	delete $tmpRefUVBand;
+	
+	
+	// ------------------------------------------------------------
+	// -- Combine all the bands into one mesh (in case of multi selection)
+	//
+	if (`size($sel)` != 1)
+	{
+		$tempArray = `polyUnite -n "hairBands#" -ch 0 $loftPolyList`;
+		$result = $tempArray[0];
+		setAttr ($result + ".doubleSided") 0;
+	}
+	else {
+		$result = $loftPoly;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Add an extra Attribute to the resulting mesh 
+	//   it will contain the ordered list of nurbs tubes (will serve later on for "bands2Tubes" wrap)
+	//
+	addAttr -ln "combineOrder" -dt "string" $result;
+	setAttr -type "string" ($result + ".combineOrder") $combOrder;
+	setAttr -lock on ($result + ".combineOrder");
+	
+	
+	// ------------------------------------------------------------
+	// -- Return the generated mesh
+	//
+	select -r $result;
+	return $result;
+}
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh
+//
+//-------------------------------------------------------------------------
+//
+global proc hT2B_getRefMesh()
+{
+	string $window 		= "win_AhairTubes2Bands";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $sel[];
+	
+	
+	$sel = `filterExpand -fullPath false -sm 12 (ls ("-sl"))`;
+	
+    if (!`size($sel)`)
+	{
+        error "Please select one POLYGONAL Object !";
+	}
+	
+	textFieldButtonGrp -e -tx $sel[0] $b_refMesh;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected isoparms' V coordinate or edge coordinate
+//
+//-------------------------------------------------------------------------
+//
+global proc hT2B_getIso1()
+{
+	string $window 	= "win_AhairTubes2Bands";
+	string $b_iso1	= ($window+"_iso1");
+	float  $isoVCoord;
+	string $sel[];
+	
+	
+	// Get isoparm from selection
+	$sel = `filterExpand -fullPath false -sm 45 (ls ("-sl"))`;
+	
+	if (`size($sel)`)
+	{
+		$isoVCoord = hT2B_getIsoparmVCoord();
+		textFieldButtonGrp -e -tx $isoVCoord $b_iso1;
+	}
+	else
+	{
+		// Get poly edge from selection
+		$sel = `filterExpand -fullPath false -sm 32 (ls ("-sl"))`;
+		
+		if (`size($sel)`)
+		{
+			$isoVCoord = hT2B_getEdgeCoord();
+			textFieldButtonGrp -e -tx $isoVCoord $b_iso1;
+		}
+		else
+		{
+			error ("Please select one NURBS isoparm or one POLY edge !");
+		}
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected isoparms' V coordinate or edge coordinate
+//
+//-------------------------------------------------------------------------
+//
+global proc hT2B_getIso2()
+{
+	string $window 	= "win_AhairTubes2Bands";
+	string $b_iso2	= ($window+"_iso2");
+	float  $isoVCoord;
+	string $sel[];
+	
+	
+	// Get isoparm from selection
+	$sel = `filterExpand -fullPath false -sm 45 (ls ("-sl"))`;
+	
+	if (`size($sel)`)
+	{
+		$isoVCoord = hT2B_getIsoparmVCoord();
+		textFieldButtonGrp -e -tx $isoVCoord $b_iso2;
+	}
+	else
+	{
+		// Get poly edge from selection
+		$sel = `filterExpand -fullPath false -sm 32 (ls ("-sl"))`;
+		
+		if (`size($sel)`)
+		{
+			$isoVCoord = hT2B_getEdgeCoord();
+			textFieldButtonGrp -e -tx $isoVCoord $b_iso2;
+		}
+		else
+		{
+			error ("Please select one NURBS isoparm or one POLY edge !");
+		}
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that LAUNCHES the script when hitting "CREATE" button
+//
+//-------------------------------------------------------------------------
+//
+global proc hT2B_apply()
+{
+	string $window		= "win_AhairTubes2Bands";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $b_iso1		= ($window+"_iso1");
+	string $b_iso2		= ($window+"_iso2");
+	string $b_spanNum	= ($window+"_spanNum");
+	
+	string $refMesh 	= `textFieldButtonGrp -q -tx $b_refMesh`;
+	string $iso1	 	= `textFieldButtonGrp -q -tx $b_iso1`;
+	string $iso2	 	= `textFieldButtonGrp -q -tx $b_iso2`;
+	int    $spanNum		= `intFieldGrp -q -v1 $b_spanNum`;
+	
+	float  $iso1f;
+	float  $iso2f;
+	string $tubeSel[];
+	
+	
+	// -- Launch main proc
+	//
+	$iso1f = (float)$iso1; // change string var to float var
+	$iso2f = (float)$iso2;
+	
+	$tubeSel = `ls -sl`;
+	
+	print ("\/\/ CMD : A_hairTubes2Bands ({\"FirstSelection\", \"SecondSelection\", ...}, " + $iso1f + ", " + $iso2f + ", " + $spanNum + ", \"" + $refMesh + "\") \n");
+	A_hairTubes2Bands($tubeSel, $iso1f, $iso2f, $spanNum, $refMesh);
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that calls the ABOUT window
+//
+//-------------------------------------------------------------------------
+//
+global proc AhairTubes2BandsAbout(string $version)
+{
+	string $winAbout = "win_AhairTubes2Bands_about";
+
+	windowPref -enableAll false;
+
+	if (`window -exists $winAbout`)
+		deleteUI -window $winAbout;
+
+	$winAbout =`window -title "About..."
+		-iconName "About win_AhairTubes2Bands"
+		-toolbox true
+		-sizeable false
+		-widthHeight 300 300
+		-topEdge 256
+		-leftEdge 512
+		$winAbout`;
+
+	columnLayout -adjustableColumn true;
+
+		text -label "";
+		text -label " Script    : AhairTubes2Bands" -align "left";
+		text -label (" Version : "+ $version) -align "left";
+		text -label " Creator : Ali" -align "left";
+		text -label " Contact : chibi_ali@homtail.com" -align "left";
+		text -label "";
+		text -label "";
+		text -label " Features : " -align "left";
+		text -label "";
+		text -label " Converts selected Nurbs or Poly TUBES to Poly BANDS" -align "left";
+		text -label "";
+		text -label " - Takes 2 isoparms (V coordinates) or edges to generate a lofted surface" -align "left";
+		text -label " - Extends the surface to have one extra face inside the skin" -align "left";
+		text -label " - Change number of spans to change resulting polyBANDS' definition" -align "left";
+		text -label " - Use a reference mesh to ensure polyBANDS' normals are well directed" -align "left";
+		text -label " - Adds an ExtraAttr on polyBANDS that'll contain the initial TUBES selection order" -align "left";
+		text -label "  (>> will serve to find the initial nurbs/poly Tubes and wrap them on the poly Bands )" -align "left";
+		text -label "";
+
+	windowPref -enableAll true;
+	showWindow $winAbout;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc AhairTubes2Bands()
+{
+	string $version = "v1.5";
+	string $window = "win_AhairTubes2Bands";
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		windowPref -remove $window;
+
+		$window = `window 	-title 		("HairTubes 2 Bands " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"AhairTubes2Bands"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title 		("HairTubes 2 Bands " + $version)
+							-iconName 	"AhairTubes2Bands"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	
+	
+
+	// -- Create a Form Layout to contain window's body
+	//
+	string $parentFrmLyt = `formLayout -numberOfDivisions 100 myFrmLyt`;
+	
+		// Create a Column Layout to contain the menu
+		//
+		string $parentCoLyt = `columnLayout -adjustableColumn true myCoLyt`;
+
+			// Create a menu for the window
+			//
+			string $menuBarLayout = `menuBarLayout`;
+			setParent ..;
+
+			//separator -height 10 -style "none";
+		
+		setParent ..;
+		
+		
+		// Body layout
+		//
+		//string $bodyLyt = `columnLayout -adjustableColumn true exCoLyt01`;
+		string $bodyLyt = `scrollLayout -w 420 -h 200 bodyLyt01`;
+		
+			// Fields
+			separator -height 10 -style "none";
+			
+			string $b_refMesh = `textFieldButtonGrp
+								-l "Reference Mesh"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "The mesh that serves as reference for normals direction (ie. the head or body which emits the hair)"
+								-bc "hT2B_getRefMesh"
+								($window+"_refMesh")`;
+
+			separator -height 10 -style "none";
+			
+			string $b_iso1    = `textFieldButtonGrp
+								-l "IsoparmV / Edge #1"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-tx "0"
+								-ann "Select an isoparm (only V) or a poly edge to get it's coordinate"
+								-bc "hT2B_getIso1"
+								($window+"_iso1")`;
+			
+			string $b_iso2    = `textFieldButtonGrp
+								-l "IsoparmV / Edge #2"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-tx "0"
+								-ann "Select an isoparm (only V) or a poly edge to get it's coordinate"
+								-bc "hT2B_getIso2"
+								($window+"_iso2")`;
+			
+			separator -height 10 -style "none";
+			
+			string $b_spanNum  = `intFieldGrp
+								-l "Num of Spans"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-v1 15
+								-ann "Change number of spans to change resulting mesh definition"
+								($window+"_spanNum")`;
+		   
+		setParent ..;
+		
+		
+		// Buttons
+		//
+		string $b_create = `button -label "Create" -w 150 -command "hT2B_apply" ($window+"_create")`;
+		
+		string $b_close = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close")`;
+
+	setParent ..;
+	
+	
+	
+	// -- Edits the MAIN FORM layout
+	//
+	formLayout -edit
+		-attachForm     $parentCoLyt	"top"     0
+		-attachForm     $parentCoLyt	"left"    0
+		-attachForm     $parentCoLyt	"right"   0
+		
+		-attachControl  $bodyLyt		"top" 	  0 $parentCoLyt
+		-attachForm     $bodyLyt		"left"    5
+		-attachForm     $bodyLyt		"right"   5
+		-attachControl	 $bodyLyt		"bottom"  5 $b_create
+		
+		-attachNone		 $b_create    	"top" 	  
+		-attachForm     $b_create	    "left"    5
+		-attachPosition $b_create	    "right"   5 50
+		-attachForm     $b_create	    "bottom"  5
+		
+		-attachNone		 $b_close    	"top" 	  
+		-attachPosition $b_close	    "left"    5 50
+		-attachForm     $b_close	    "right"   5
+		-attachForm     $b_close	    "bottom"  5
+		
+	$parentFrmLyt;
+	
+	
+	// -- Edits the window's menu
+	//
+	setParent $menuBarLayout;
+		menu -label "Help" -helpMenu true;
+			menuItem -label "About..." -c ("AhairTubes2BandsAbout \"" + $version + "\"") helpMit;
+	
+	
+	// -- Launch the window
+	//
+	showWindow $window;
+}
+

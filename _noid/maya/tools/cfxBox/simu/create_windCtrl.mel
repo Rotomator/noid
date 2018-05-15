@@ -1,0 +1,129 @@
+//=============================================================================
+//
+//	create wind driver			
+//							
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.3
+//
+// Created  :    14/10/2010
+// Modified :    22/10/2010
+//
+// Creator 	:    uu
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "create_windCtrl" to launch the script
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+global proc create_windCtrl()
+{
+int $numSel;
+string $check[];
+string $checkname[];
+string $NCheck[];
+string $newNameLight;
+string $sel[];
+$sel=`ls -sl`;
+$numSel = `size($sel)`;
+$checknameRef=`ls -sl "*:*_nCloth"`;
+$checkname= `ls -sl "*_nCloth"`;
+string $sl;
+int $numName;
+
+if(`size($checkname)`>0){
+$numName=`size($checkname)`;
+
+}
+else{
+$numName=`size($checknameRef)`;
+
+}
+// ------------------------------------------------------------
+// -- chekc the name of selected objects
+//
+if ($numSel>0){ 
+  if ($numSel == $numName)
+    {
+     
+
+
+	// ------------------------------------------------------------
+	// -- check is connection alredy exist
+	//
+    for( $sl in $sel )
+        {	
+	    string $shapes[] = `listRelatives -s -path $sl`;
+            string $NCheck[]= `listConnections -d on -s off -t nucleus $shapes[0]`;
+            string $check[]= `listConnections -d on -t vectorProduct $NCheck[0]`; 
+   
+               if (`objExists $check[0]`>0){
+
+                    error "one or more objects already connect to vectorProduct";
+               }
+       }
+
+	// ------------------------------------------------------------
+	// -- create global WindCtrl
+	//
+ 
+        CreateSpotLight;
+        transformLimits -sx 0.2 1 -esx 1 0 ;
+        transformLimits -sy 0.2 1 -esy 1 0 ;
+        transformLimits -sz 0.2 1 -esz 1 0 ;
+        $newNameLight = `substitute "_nCloth" $sel[0] "Spot"`;
+        rename $newNameLight;
+        shadingNode -asUtility vectorProduct;
+        $newNameVec = `substitute "_nCloth" $sel[0] "Vec"`;
+        rename $newNameVec;
+        setAttr ($newNameVec + ".operation") 3;
+        setAttr ($newNameVec +".input1Z") -1;
+	setAttr -lock true ($newNameLight + ".sz");
+	setAttr -keyable false -channelBox false ($newNameLight + ".sz");
+        connectAttr -f ($newNameLight+".xformMatrix") ($newNameVec+".matrix");
+
+ 
+	    // ------------------------------------------------------------
+	    // -- connect WindCtrl to each selected nucleus
+	    //
+            for($i=0;$i<$numSel;$i++)
+            {
+
+                $newNameShape =`listRelatives -s -path $sel[$i] `;
+                string $nucleus[]= `listConnections -d on -s off -t nucleus $newNameShape`;
+                                                                                                                                             
+                connectAttr -f ($newNameVec+".outputX") ($nucleus[0]+".windDirectionX");
+                connectAttr -f ($newNameVec+".outputY") ($nucleus[0]+".windDirectionY");
+                connectAttr -f ($newNameVec+".outputZ") ($nucleus[0]+".windDirectionZ");            
+                connectAttr -f ($newNameLight+"Shape"+".coneAngle") ($nucleus[0]+".windSpeed");
+                connectAttr -f ($newNameLight+".scaleX") ($nucleus[0]+".airDensity");
+             }        
+    }  
+else
+    {
+       warning "one or more objets name different type xx_nCloth" ;
+    }
+}
+else
+    {
+       warning "nothing selected" ;
+    }
+};

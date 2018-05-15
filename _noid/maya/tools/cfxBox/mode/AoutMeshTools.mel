@@ -1,0 +1,461 @@
+//=============================================================================
+//
+//	Out Mesh Tools 	- Various tools to duplicate objects and create proxies
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.7
+//
+// Created  :    20/08/2010
+// Modified :    22/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "A_dupliObj(`ls -sl`)" to duplicate selected objects in their current state
+//
+//				- use "A_outMesh(`ls -sl`)" to create an outMesh/Proxy of selected objects
+//
+//				- use "A_updateOutMesh(`ls -sl`)" to update selected object from a source connection
+//
+//				>> You must source "ATools.mel" and "ARTBox.mel" to use thoses scripts !!
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+//-------------------------------------------------------------------------
+//
+// Procedure that duplicates selected objects in their current state
+//		<< takes for arg a list of objects (poly, nurbs, subdiv)
+//
+//		>> returns the created objects list
+//
+//-------------------------------------------------------------------------
+
+global proc string[] A_dupliObj(string $sel[])
+{
+	string $sel[];
+	string $filtSel[];
+	string $curSel;
+	string $tempSel[];
+	string $curPar;
+	string $curType;
+	int    $curFrame;
+	string $cleanName;
+	string $dupliPar;
+	string $dupliShp;
+	string $outSourcePlug;
+	string $inDestPlug;
+	string $result[];;
+	
+	
+	// ------------------------------------------------------------
+	// -- Check selection
+	//
+	if ( !`size($sel)` ) {
+		error ("Please select at least one POLY, NURBS or SUBDIV object as source !");
+	}
+	
+	$filtSel = `filterExpand -fullPath true -sm 12 -sm 10 -sm 9 -sm 68 $sel`;
+	
+	if (!size($filtSel)) {
+		error ("Please select at least one POLY, NURBS or SUBDIV object as source !");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Duplicate each selected object depending on it's type
+	//
+	for ($curSel in $filtSel)
+	{
+		// ------------------------------------------------------------
+		// -- Create the new object
+		//
+		$tempSel  = `listRelatives -p -pa $curSel`;
+		$curPar   = $tempSel[0];
+		
+		$curType  = `nodeType $curSel`;
+		$curFrame = `currentTime -q`;
+		
+		// Remove any existing nameSpace and pipes
+		$cleanName = `substitute "|" $curPar "_"`;
+		$cleanName = `substitute "^[^.]*:" $cleanName ""`;
+		
+		$dupliPar = `createNode transform -n ($cleanName + "_frm" + $curFrame)`;
+		$dupliShp = `createNode $curType -p $dupliPar -n ($dupliPar + "Shape")`;
+		
+		
+		// ------------------------------------------------------------
+		// -- Define in/out connection depending on object type
+		//
+		if ( $curType == "nurbsCurve" || $curType == "nurbsSurface" )
+		{
+			$outSourcePlug	= ".worldSpace";
+			$inDestPlug		= ".create";
+		}
+		else if ( $curType == "subdiv" )
+		{
+			$outSourcePlug	= ".worldSubdiv";
+			$inDestPlug		= ".create";
+		}
+		else if ( $curType == "mesh" )
+		{
+			$outSourcePlug	= ".outMesh";
+			$inDestPlug		= ".inMesh";
+		}
+		
+		
+		// ------------------------------------------------------------
+		// -- Connect in/out plugs
+		//
+		connectAttr -f ($curSel + $outSourcePlug) ($dupliPar + $inDestPlug);
+		getAttr -silent ($dupliPar + $outSourcePlug); // forces evaluation
+		disconnectAttr ($curSel + $outSourcePlug) ($dupliPar + $inDestPlug);
+		
+		if ($curType != "nurbsCurve") {
+			sets -e -forceElement initialShadingGroup $dupliPar;
+		}
+		
+		$result[size($result)] = $dupliPar;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all resulting duplicates
+	//
+	select -r $result;
+	return $result;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that creates an outMesh/Proxy for selected objects
+//		<< takes for arg a list of objects (poly, nurbs, subdiv)
+//
+//		>> returns the created objects list
+//
+//-------------------------------------------------------------------------
+
+global proc string[] A_outMesh(string $sel[])
+{
+	string $sel[];
+	string $filtSel[];
+	string $compSel[];
+	int    $isCompon = 0;
+	string $curSel;
+	string $tempSel[];
+	string $curPar;
+	string $curType;
+	string $cleanName;
+	string $dupliPar;
+	string $dupliShp;
+	string $outSourcePlug;
+	string $inDestPlug;
+	string $hasShading[];
+	string $filtCompSel[];
+	string $result[];;
+	
+	
+	// ------------------------------------------------------------
+	// -- Check selection
+	//
+	if ( !`size($sel)` ) {
+		error ("Please select at least one POLY / NURBS / SUBDIV object or POLY FACE as source !");
+	}
+	
+	$filtSel = `filterExpand -fullPath true -sm 12 -sm 10 -sm 9 -sm 68 $sel`;
+	$compSel = `filterExpand -fullPath true -ex 0 -sm 34 $sel`;
+	
+	if ( !size($filtSel) && !size($compSel) ) {
+		error ("Please select at least one POLY / NURBS / SUBDIV object or POLY FACE as source !");
+	}
+	else if ( !size($filtSel) )
+	{
+		// Take components only if no objects were selected
+		$isCompon = 1;
+		$filtSel  = `stringArrayRemoveDuplicates (listRelatives ("-parent", "-fullPath", $compSel))`;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Duplicate each selected object depending on it's type
+	//
+	for ($curSel in $filtSel)
+	{
+		// ------------------------------------------------------------
+		// -- Create the new object
+		//
+		$tempSel  = `listRelatives -p -pa $curSel`;
+		$curPar   = $tempSel[0];
+		$curType  = `nodeType $curSel`;
+		
+		// Remove any existing nameSpace and pipes
+		$cleanName = `substitute "|" $curPar "_"`;
+		$cleanName = `substitute "^[^.]*:" $cleanName ""`;
+		
+		$dupliPar = `createNode transform -n ($cleanName + "_OUT")`;
+		$dupliShp = `createNode $curType -p $dupliPar -n ($dupliPar + "Shape")`;
+		
+		
+		// ------------------------------------------------------------
+		// -- Define in/out connection depending on object type
+		//
+		if ( $curType == "nurbsCurve" || $curType == "nurbsSurface" )
+		{
+			$outSourcePlug	= ".worldSpace";
+			$inDestPlug		= ".create";
+		}
+		else if ( $curType == "subdiv" )
+		{
+			$outSourcePlug	= ".worldSubdiv";
+			$inDestPlug		= ".create";
+		}
+		else if ( $curType == "mesh" )
+		{
+			$outSourcePlug	= ".outMesh";
+			$inDestPlug		= ".inMesh";
+		}
+		
+		
+		// ------------------------------------------------------------
+		// -- Connect in/out plugs
+		//
+		connectAttr -f ($curSel + $outSourcePlug) ($dupliPar + $inDestPlug);
+		
+		
+		// ------------------------------------------------------------
+		// -- Transfer the shading assignement if there's one
+		//
+		$hasShading = `listSets -ets -object $curSel -type 1`;
+		
+		if ( size($hasShading) )
+			ART_transferObjShading $curSel $dupliShp;
+		
+		
+		// ------------------------------------------------------------
+		// -- If component mode >> Keep only selected faces
+		//
+		if ( $isCompon )
+		{
+			// Get from selection only the current object's components
+			select -r $compSel;
+			$filtCompSel = `ls -sl ($curPar+".f[*]")`;
+			
+			// Replace current object by it's proxy
+			for ($i=0; $i<size($filtCompSel); $i++) {
+				$filtCompSel[$i] = `substitute "^[^.]*" $filtCompSel[$i] $dupliShp`;
+			}
+			
+			select -r $filtCompSel;
+			select -toggle ($dupliShp + ".f[*]");
+			delete;
+		}
+		
+		
+		$result[size($result)] = $dupliPar;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all resulting proxies
+	//
+	select -r $result;
+	return $result;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that updates selected object from a source connection
+// (you can also select 2 groups with the same hierarchy)
+//		<< takes for arg a 2 objects (poly, nurbs, subdiv, groups)
+//		<< takes for arg a boolean to keep outMesh / inMesh connection or not
+//
+//		>> returns the updated objects list
+//
+//-------------------------------------------------------------------------
+
+global proc string[] A_updateOutMesh(string $sel[], int $keepCon)
+{
+	string $sel[];
+	string $selSrc[];
+	string $selDst[];
+	string $tempSel[];
+	string $srcPar;
+	string $dstPar;
+	string $srcType;
+	string $dstType;
+	string $outSourcePlug;
+	string $inDestPlug;
+	string $allDstOrigList[];
+	string $histOrigList[];
+	string $dstOrigList[];
+	string $dstOrig;
+	string $hasShading[];
+	string $tmpPXY[];
+	string $tmpPXYShp[];
+	string $result[];;
+	
+	
+	// ------------------------------------------------------------
+	// -- Check selection
+	//
+	if ( `size($sel)` != 2 ) {
+		error ("Please select only one source and one destination object !");
+	}
+	
+	$selSrc = `filterExpand -fullPath true -sm 09 -sm 10 -sm 12 $sel[0]`;
+	$selDst = `filterExpand -fullPath true -sm 09 -sm 10 -sm 12 $sel[1]`;
+	
+	if (!size($selSrc) || !size($selDst)) {
+		error ("Please select POLY or NURBS for source and destination objects !");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Duplicate each selected object depending on it's type
+	//
+	for ($i=0; $i<size($selSrc); $i++)
+	{
+		// ------------------------------------------------------------
+		// -- Get source/dest transforms and object type
+		//
+		$tempSel  = `listRelatives -p -pa $selSrc[$i]`;
+		$srcPar   = $tempSel[0];
+		$srcType  = `nodeType $selSrc[$i]`;
+		
+		$tempSel  = `listRelatives -p -pa $selDst[$i]`;
+		$dstPar   = $tempSel[0];
+		$dstType  = `nodeType $selDst[$i]`;
+		
+		if ($srcType != $dstType) {
+			error ("Source \"" + $srcPar + "\" and Destination \"" + $dstPar + "\" objects must have the same type !");
+		}
+		
+		
+		// ------------------------------------------------------------
+		// -- Define in/out connection depending on object type
+		//
+		if ( $srcType == "nurbsCurve" || $srcType == "nurbsSurface" )
+		{
+			$outSourcePlug	= ".worldSpace";
+			$inDestPlug		= ".create";
+		}
+		else if ( $srcType == "mesh" )
+		{
+			$outSourcePlug	= ".outMesh";
+			$inDestPlug		= ".inMesh";
+		}
+		
+		
+		// ------------------------------------------------------------
+		// -- Get the destination's shapeOrig (last connected one) and connect source.out > destShapeOrig.in
+		//
+		$allDstOrigList = `ls -dag -io -type shape $dstPar`; // all mesh's shapeOrigs (even floating/non-connected ones)
+		$histOrigList   = `ls -io -type shape (listHistory ("-breadthFirst", $dstPar))`; // all shapeOrigs connected in mesh's history
+		
+		if ( size($allDstOrigList) && size($histOrigList) )
+		{
+			// Get shapeOrigs that are : from destination mesh + connected in history
+			select -r $histOrigList;
+			$dstOrigList = `ls -sl -io -type shape $allDstOrigList`;
+			
+			// Get last shapeOrig in case of multi-shapes
+			$dstOrig = $dstOrigList[size($dstOrigList)-1];
+			
+			if ( size(listHistory ("-breadthFirst", $dstOrig)) > 1)
+			{
+				warning ("The shapeOrig \"" + $dstOrig + "\" has an incoming connection ! Skipping... (You'd rather update that incoming source) ");
+				continue;
+			}
+			
+			// Freeze destination's vtx values to avoid offsets
+			if ( $srcType == "mesh" && !`referenceQuery -isNodeReferenced $dstOrig` )
+			{
+				setAttr ($dstOrig + ".intermediateObject") 0;
+				polyNormal -normalMode 2 -userNormalMode 0 -ch 1 $dstOrig;
+				delete -ch $dstOrig;
+				setAttr ($dstOrig + ".intermediateObject") 1;	
+			}
+			
+			// Connect in/out plugs (source > destShapeOrig)
+			connectAttr -f ($srcPar + $outSourcePlug) ($dstOrig + $inDestPlug);
+			getAttr -silent ($dstOrig + $outSourcePlug); // forces evaluation
+			
+			// Disconnect in/out plugs depending on $keepCon option
+			if ($keepCon == 0) {
+				disconnectAttr ($srcPar + $outSourcePlug) ($dstOrig + $inDestPlug);
+			}
+		}
+		
+		// ------------------------------------------------------------
+		// -- If NO history, backup shading assignment before connecting out/inMesh
+		//    >> a direct out/in connection would break the group parts & the shading
+		else
+		{
+			$dstOrig = $selDst[$i];
+			
+			// Freeze destination's vtx values to avoid offsets
+			if ( $srcType == "mesh" && !`referenceQuery -isNodeReferenced $dstOrig` )
+			{
+				polyNormal -normalMode 2 -userNormalMode 0 -ch 1 $dstOrig;
+				delete -ch $dstOrig;
+			}
+			
+			// Backup shading assignement in a temp obj (if there's one)
+			$hasShading = `listSets -ets -object $dstOrig -type 1`;
+			
+			if ( size($hasShading) )
+			{
+				$tmpPXY    = A_outMesh({$dstOrig});
+				$tmpPXYShp = `filterExpand -fullPath true -sm 09 -sm 10 -sm 12 $tmpPXY[0]`;
+				sets -e -forceElement initialShadingGroup $dstOrig;
+			}
+			
+			// Connect in/out plugs (source > destShapeOrig)
+			connectAttr -f ($srcPar + $outSourcePlug) ($dstOrig + $inDestPlug);
+			getAttr -silent ($dstOrig + $outSourcePlug); // forces evaluation
+			
+			// Disconnect in/out plugs depending on $keepCon option
+			if ($keepCon == 0) {
+				disconnectAttr ($srcPar + $outSourcePlug) ($dstOrig + $inDestPlug);
+			}
+			
+			// Restore shading assignment
+			if ( size($hasShading) )
+			{
+				ART_transferObjShading($tmpPXYShp[0], $dstOrig);
+				delete $tmpPXY;
+			}
+		}
+		
+		
+		$result[size($result)] = $dstPar;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all updated objects
+	//
+	select -r $result;
+	return $result;
+}
+

@@ -1,0 +1,646 @@
+//=============================================================================
+//
+//	GeoConnect Hi Interface
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.0
+//
+// Created  :    28/04/2011
+// Modified :    02/05/2011
+//
+// Creator 	:    mv
+//
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "cacheHiInt()" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that create geocache of All Hi CFX selected shapes.
+//
+//		
+//
+//-------------------------------------------------------------------------
+
+
+global proc geocacheHi()
+
+{ 
+        string $selshape[]; 
+        
+        string $sel[] =`ls -sl`;
+        
+        
+	    if ( !`size($sel)` ) 
+	    {
+    	    $setCfx = `ls  -typ objectSet -r on "*CFX_HI_SET"`;
+            $allCfx = `listConnections $setCfx`;
+		    $selshape = $allCfx;
+		   
+	    }
+	    
+	    else
+	    { 
+	       $selshape = $sel;
+	    }
+	
+        string $folder =`recupfoldernamecreate($selshape [0])`;
+        
+        for ($current in $selshape)
+            {
+        
+            string $folder=`recupfoldernamecreate($current)`;
+    	    string $selectcache =`substitute ":" $current "_"`;
+    	    string $deletedcache = $selectcache + "ShapeCache*";
+    	
+            	if (`objExists ($deletedcache)`)
+            	    {
+            		
+            	    delete $deletedcache;
+            		 
+            		}
+            }
+            
+        select -r $selshape;
+        
+        print ($selshape);
+        
+        $cacheFile = `doCreateGeometryCache 5 { "2", "0", "1", "OneFile", "0",$folder,"1","","0", "export", "0", "1", "1","0","1","mcc" }`;
+ 
+        
+    }
+
+
+    
+//-------------------------------------------------------------------------
+//
+// Procedure that recuperate folder name to create cache
+//
+//		>> returns the folder name
+//
+//-------------------------------------------------------------------------  
+global proc string recupfoldernamecreate(string $select)
+
+    { 
+    
+        string $fileName = `file -q -sceneName`;
+        string $DName=`match "[^/\\]*$" $fileName`;
+        string $DNamereduce=`match "^[^\.]*" $DName`;
+        string $component =match( "^.*/", $fileName );
+        int $sz = size( $component );
+    
+      // Strip off trailing '/'
+      //
+          if ( ( $sz > 1 ) && ( substring( $component, $sz, $sz ) == "/" ) ) 
+	  {
+    	  $component = substring( $component, 1, ($sz - 1) );
+    	  }
+    
+    	string $cacheDirectory= $component + "_SyCache/" + $DNamereduce + "_SyCache/";
+    	string $foldername = $cacheDirectory + "Hi";
+    	print ($foldername + "\n") ;
+    	
+    	
+    	return $foldername;
+    
+    }
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that duplicates selected objects in their current state
+//		<< takes for arg a list of objects (poly, nurbs, subdiv)
+//
+//		>> returns the created objects list
+//
+//-------------------------------------------------------------------------
+
+
+        global proc string[] A_dupliObjHi(string $sel[], string $bddobj)
+{
+	string $sel[];
+	string $filtSel[];
+	string $curSel;
+	string $tempSel[];
+	string $curPar;
+	string $curType;
+	string $cleanName;
+	string $dupliPar;
+	string $dupliShp;
+	string $outSourcePlug;
+	string $inDestPlug;
+	string $result[];
+	string $GroupeHi;
+	string $nomDuGroupHi = "HiDef";
+	
+	// ------------------------------------------------------------
+	// -- Check selection
+	//
+	if ( !`size($sel)` ) {
+		error ("Please select at least one POLY, NURBS or SUBDIV object as source !");
+	}
+	
+	$filtSel = `filterExpand -fullPath true -sm 12 -sm 10 -sm 9 -sm 68 $sel`;
+	
+	if (!size($filtSel)) {
+		error ("Please select at least one POLY, NURBS or SUBDIV object as source !");
+	}
+	
+	
+	$namespace=  `match "^[^\_]*" $sel[0]`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Duplicate each selected object depending on it's type
+	//
+	for ($curSel in $filtSel)
+	{
+		// ------------------------------------------------------------
+		// -- Create the new object
+		//
+		$tempSel  = `listRelatives -p -pa $curSel`;
+		$curPar   = $tempSel[0];
+		
+		$curType  = `nodeType $curSel`;
+		
+		// Remove any existing nameSpace and pipes
+
+		$cleanName = `substitute "|" $curPar "_"`;
+		$cleanName = `substitute "^[^.]*:" $cleanName ""`;
+		$existObj = $namespace + "_" + $cleanName + "_Hi";
+		
+		if (!`objExists $existObj`)
+		  {
+
+		  $dupliPar = `createNode transform -n ($namespace + "_" + $cleanName + "_Hi" )`;
+		  $dupliShp = `createNode $curType -p $dupliPar -n ($dupliPar + "Shape")`;
+		    
+		
+		  // ------------------------------------------------------------
+		  // -- Define in/out connection depending on object type
+		  //
+		  if ( $curType == "nurbsCurve" || $curType == "nurbsSurface" )
+		    {
+			    $outSourcePlug	= ".worldSpace";
+			    $inDestPlug		= ".create";
+		    }
+		  else if ( $curType == "subdiv" )
+		    {
+			    $outSourcePlug	= ".worldSubdiv";
+			    $inDestPlug		= ".create";
+		    }
+		  else if ( $curType == "mesh" )
+		    {
+			    $outSourcePlug	= ".outMesh";
+			    $inDestPlug		= ".inMesh";
+		    }
+		  
+		
+		// ------------------------------------------------------------
+		// -- Connect in/out plugs
+		//
+
+	    	connectAttr -f ($curSel + $outSourcePlug) ($dupliPar + $inDestPlug);
+	    	getAttr -silent ($dupliPar + $outSourcePlug); // forces evaluation
+	    	disconnectAttr ($curSel + $outSourcePlug) ($dupliPar + $inDestPlug);
+		
+		
+		
+	    	if ($curType != "nurbsCurve") 
+		  {
+		    	sets -e -forceElement initialShadingGroup $dupliPar;
+		   }
+		
+	       	$result[size($result)] = $dupliPar;
+	       	
+        //----------------------------------------------------------
+        // -- Creation du groupe Hi et parentge des duplicatas
+        //
+        
+		if (`objExists $nomDuGroupHi`)
+		{
+		  $GroupeHi = $nomDuGroupHi;
+		}
+		else
+		{
+		    string $group = `group -em -name $nomDuGroupHi`;
+		    $GroupeHi = $group;
+	
+		};
+            
+    
+            parent $result $GroupeHi;
+            
+            
+        // ------------------------------------------------------------
+        // -- connect duplicate to the BDD:HiDef obj
+        // BlendShape a source duplicate to avoid namespace errors (if source is a Reference)
+        
+        
+       
+        
+       
+        string $history[] = `listHistory $bddobj` ; 
+       
+            for ($BCfx in $history)
+                {
+            
+                string $suffix = `match "blendShape_CFX_[0-9]+$" $BCfx`;   
+    
+                if  (!(size($suffix) == 0)) 
+                    {
+                     print ("Delete existing blendshape on " + $bddobj + "\n"); 
+                     delete $BCfx;
+                                 
+                    }
+                        
+                }
+            
+          
+            
+		if (!(size($result) == 0))
+    		{
+    		
+    		    $curCfxBS = `blendShape -n "blendShape_CFX_#" -before $result $bddobj`;
+    		    setAttr ($curCfxBS[0] + ".w[0]") 1;
+    		}
+
+	    }
+		
+		else
+		{
+		
+    		print ($curSel + " a deja ete traite \n");
+    		
+    		$result[size($result)] = $existObj;
+
+		}
+  }
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all resulting duplicates
+	//
+	
+	select -r $result;
+	return $result;
+	
+	
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that delete cache present on shape
+//
+//		
+//
+//-------------------------------------------------------------------------
+
+global proc ClearCacheHi(){
+
+    string $selnCache[]=`ls -sl`;
+    string $selrelatvie[]=`listRelatives -s -path $selnCache[0]`;
+    string $ncacheBlend[] = `listConnections -t historySwitch $selrelatvie[0]`;
+    string $shorterBlend[] = stringArrayRemoveDuplicates($ncacheBlend);
+    
+    if(size($shorterBlend)>0)
+      {
+      select -r $shorterBlend;
+      delete;
+      }
+      
+    string $ncache[] = `listConnections -t cacheFile $selrelatvie[0]`;
+    string $shorterCache[] = stringArrayRemoveDuplicates($ncache);
+
+    if(`objExists $shorterCache[0]`== 1)
+      {
+      select $selnCache[0];    
+      deleteCacheFile 3 { "keep", "", "nCloth" };
+
+      }
+}
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that recuperate folder name to assign cache
+//
+//		>> returns the folder name
+//
+//-------------------------------------------------------------------------
+
+global proc string recupfoldernameHi(string $select){ 
+  
+    string $fileName = `file -q -sceneName`;
+    string $DName=`match "[^/\\]*$" $fileName`;
+    string $DNamereduce=`match "^[^\.]*" $DName`;
+    string $component =match( "^.*/", $fileName );
+    int $sz = size( $component );
+
+  // Strip off trailing '/'
+  //
+      if ( ( $sz > 1 ) && ( substring( $component, $sz, $sz ) == "/" ) ) 
+      {
+	  $component = substring( $component, 1, ($sz - 1) );
+	  }
+
+	string $cacheDirectory= $component + "_SyCache/" + $DNamereduce + "_SyCache/";
+	string $cachefolder= `match "^[^\:]*" $select`;  
+	string $foldername = $cacheDirectory +"Hi/";
+	
+	
+	return $foldername;
+
+
+}
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that assign cache to Duplicated Shape
+//
+//	
+//
+//-------------------------------------------------------------------------
+
+global proc AttachCacheHi(string $curCfx, string $cfxDupli)
+            
+            { 
+ 
+
+            string $cacheName = `substitute ":" $curCfx "_"`;
+            string $cacheNameFull = $cacheName + "Shape" ;
+            string $shapes[] = `listRelatives -s -ni -path $cfxDupli`;        
+
+            ClearCacheHi;
+
+            string $folder=`recupfoldernameHi $curCfx`;
+
+            $checkNumber = `getFileList -fs ($folder + $cacheNameFull + ".xml")`;
+        
+            if (size($checkNumber))
+                {
+                string $channels[] = `cacheFile -fileName ($folder+$cacheNameFull+".xml") -q -channelName`;
+    	        string $switch = createHistorySwitch($shapes[0],false);
+    	        string $cacheNode = `cacheFile -attachFile -f ($folder+$cacheNameFull+".xml") -cnm $channels[0] -ia ($switch+".inp[0]")`;
+    
+                connectAttr -f ($cacheNode+".inRange") ($switch +".playFromCache");
+                }
+                
+            else
+                {
+                warning ("Il n'existe aucun cache pour " + $curCfx + "\n");
+                }    
+    	    }
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that duplicate all HiDef CFX objects, and connects them to HiDef BDD objects
+//
+//		>> returns the list of all connected BDD objects
+//
+//-------------------------------------------------------------------------
+
+
+global proc AconnectHiCfx2Bdd()
+{
+    string $currentSel[];
+	string $nClothNodes[];
+	string $cfxNameSpac[];
+	string $cfxNameSpace;
+	string $cfxObjs[];
+	string $curCfx;
+	string $baseName;
+	string $objListNS[];
+	string $curObjNS;
+	string $bddObj;
+	string $cfxGrp;
+	string $cfxDupli[];
+	string $curCfxBS[];
+	string $srcBSTagets[];
+	string $destBSConns[];
+	string $bddObjs[];
+	string $hiObjs[];
+	string $obj;
+	string $listall[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Set current nameSpace to the default
+	//
+	namespace -setNamespace ":";
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the namespace of CFX objects
+	//
+	
+	$currentSel= `ls -sl`;
+	
+	  if (size($currentSel) == 0)
+	  {		
+    	$setCfx = `ls  -typ objectSet -r on "*CFX_HI_SET"`;
+        $allCfx = `listConnections $setCfx`;
+		 		 
+    	$cfxObjs = $allCfx;
+    	    	
+    	
+        		    
+        		    
+        		// ------------------------------------------------------------
+            	// -- Connect the CFX:HiDef object to the corresponding BDD:HiDef
+            	//
+        
+            	for ($curCfx in $cfxObjs)
+            	
+            	    {
+            	    
+            	    $cfxNameSpace = `match "^[^\_]*" $curCfx`;
+            		// ------------------------------------------------------------
+            		// -- Get all namespaced objects with the same base name as $curCfx
+            		//
+            		$baseName  = `substitute "^[^.]*:" $curCfx ""`;
+            		$objListNS = `ls -type transform -recursive on ("*:" + $baseName + "*")`;
+            		
+            		$cfxmatch = `match "^[^.]*_" $baseName`;
+            		$basematch  = $cfxmatch + "msh";
+            		$objListmsh = `ls -type transform -recursive on ("*:" + $basematch + "*")`;
+            		
+            		$listall = stringArrayCatenate($objListmsh, $objListNS);
+                	
+                	$bddObj    = "";	
+            		
+            		// ------------------------------------------------------------
+            		// -- Match the one having a "BDD" namespace
+            		//
+        
+            		for ($curObjNS in $listall)
+            		
+        
+                		{
+                			if (`gmatch $curObjNS ($cfxNameSpace + "*BDD*" + "*cfx")`)
+                			{
+                				$bddObj = $curObjNS;
+                				break;
+                			}
+            			
+                			else if (`gmatch $curObjNS ($cfxNameSpace + "*BDD*" + "*msh")`)
+                			{
+                				$bddObj = $curObjNS;
+                				
+                			}
+                		}
+                		
+                	if ($bddObj == "")
+                	{
+                		warning ("No \"BBD:\" object matches \"" + $curCfx + "\" ! Skipping... \n");
+                		continue;
+                	}
+            		
+        
+            		
+        	        // ------------------------------------------------------------
+        	        // -- Duplicate the CFX:HiDef obj and connect it to the BDD:HiDef obj
+            		
+            	 
+                    string $cfxDupli[] =`A_dupliObjHi {$curCfx} $bddObj`;
+                    
+                    //----------------------------------------------------------
+                    // -- create cache node and attach cache files to duplicated shape
+                    //        
+                    
+                    
+                    AttachCacheHi $curCfx $cfxDupli[0];
+  
+             }
+         }
+         
+         else
+	        
+		  {
+		    
+		    $cfxObjs = $currentSel;
+
+		    for ($curCfx in $cfxObjs)
+        	
+        	    {
+        	         	    
+			    $cfxNameSpace = `match "^[^\_]*" $curCfx`;
+			    
+        		// ------------------------------------------------------------
+        		// -- Get all namespaced objects with the same base name as $curCfx
+        		//
+        		$baseName  = `substitute "^[^.]*:" $curCfx ""`;
+        		$objListNS = `ls -type transform -recursive on ("*:" + $baseName + "*")`;
+        		
+        		$cfxmatch = `match "^[^.]*_" $baseName`;
+        		$basematch  = $cfxmatch + "msh";
+        		$objListmsh = `ls -type transform -recursive on ("*:" + $basematch + "*")`;
+        		
+    
+        		$listall = stringArrayCatenate($objListNS, $objListmsh);
+
+        		$bddObj    = "";
+        		 
+        		
+        		// ------------------------------------------------------------
+        		// -- Match the one having a "BDD" namespace
+        		//
+    
+        		for ($curObjNS in $listall)
+        		
+    
+            		{
+            			if (`gmatch $curObjNS ($cfxNameSpace + "*BDD*" + "*cfx")`)
+            			{
+            				$bddObj = $curObjNS;
+            				break;
+            			}
+            			
+            			else if (`gmatch $curObjNS ($cfxNameSpace + "*BDD*" + "*msh")`)
+            			{
+            				$bddObj = $curObjNS;
+            				
+            			}
+            			
+            		}
+            		
+            		//print ("bdd obj est " + $bddObj);
+            		
+            	if ($bddObj == "")
+            	{
+            		warning ("No \"BBD:\" object matches \"" + $curCfx + "\" ! Skipping... \n");
+            		continue;
+            	}
+
+    	        // ------------------------------------------------------------
+    	        // -- Duplicate the CFX:HiDef obj and connect it to the BDD:HiDef obj
+        		
+                string $cfxDupli[] =`A_dupliObjHi {$curCfx} $bddObj`;
+                
+                //----------------------------------------------------------
+                // -- create cache node and attach cache files to duplicated shape
+                //        
+                
+                AttachCacheHi $curCfx $cfxDupli[0];
+                
+                }
+             }
+
+       warning ("Attention! Les éléments non prevu en CFX n'ont peut-être pas été traité!");     
+}
+
+    	
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//----------------------	    UserInterface			-----------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc cacheHiInt()
+  {
+string $wndName = "cachesHi";
+string $version = "_v1.20";
+
+    if (`window -exists cachesHi`) deleteUI cachesHi;
+    if (`windowPref -exists cachesHi`) windowPref -remove cachesHi;
+   
+    window -title ($wndName  + $version) -widthHeight 215 60 cachesHi;
+    columnLayout -columnAttach "both" 5 -rowSpacing 5 -columnWidth 200;
+         button -label "Create GeoCaches Hi" -command "geocacheHi";
+         button -label "Duplicate and Assign Caches" -command "AconnectHiCfx2Bdd()";
+    showWindow cachesHi; 
+
+  };

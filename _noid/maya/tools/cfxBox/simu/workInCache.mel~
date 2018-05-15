@@ -1,0 +1,221 @@
+
+
+// -- Procedure that reassign or create caches on duplicated shapes of the selected shapes
+// -- workInCache.png
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+global proc workInCache()
+{
+
+
+
+
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+string $sel[] = `ls-sl`;
+string $tempSel[];
+string $curPar;
+string $curType;
+string $cleanName;
+string $dupli[];
+string $dupliShp;
+string $outSourcePlug;
+string $inDestPlug;
+string $result[];
+string $ncloth[];
+
+string $cacheTmpDir;
+string $cacheAttachCmd;
+
+string $isolateSel[];
+string $testShape[];
+	
+
+	
+	/*
+	process
+	-----------------------------------------------------*/	
+for($i=0; $i<size($sel); $i++)
+{
+
+    // -- Check selection
+
+    if ( !`size($sel)` )
+    {
+		error ("Please select a poly mesh object as source !");
+    }
+	
+	//check selections--------------------------------------------------------
+	
+	for($node in $sel)
+		{
+			
+		$testShape=`listRelatives -s -ni $node`;
+				
+				if(`size($testShape)`)
+				{
+						if (`nodeType $testShape` != "Mesh")
+						{
+									error ("Please select a poly mesh object as source !");
+						}
+				}
+				
+				else
+				{
+										error ("Please select a poly mesh object as source !");
+				}
+		
+		}
+		
+		
+    $filtSel = `filterExpand -fullPath true -sm 12 $sel[$i]`;
+	
+    if (!size($filtSel))
+    {
+		error ("Please select at least one POLY, NURBS or SUBDIV object as source !");
+    }	    
+
+	// -- duplicate process /Create the new object
+
+    string $selShape[] = `listRelatives -s $sel[$i]`;
+    $curType  = `nodeType $selShape[0]`;
+
+       
+	// -- duplicate process / Remove any existing nameSpace and pipes
+
+    string $duplicat[] = `duplicate -rr $sel[$i]`;
+    string $duplicatShape[] = `listRelatives -s -ni $duplicat[0]`;
+	$dupli[0] = `createNode transform -n ($sel[$i]+"GEO")`;
+	$dupliShp = `createNode $curType -p $dupli[0] -n ($dupli[0] + "Shape")`;
+       
+	// -- duplicate process /Connect in/out plugs
+
+	connectAttr -f ($duplicatShape[0] + ".outMesh") ($dupli[0] +  ".inMesh");
+	getAttr -silent ($dupli[0] + ".outMesh"); // forces evaluation
+	disconnectAttr ($duplicatShape[0] + ".outMesh") ($dupli[0] +  ".inMesh");
+	delete $duplicat[0];
+	   
+	//-- check existing cacheFile
+	
+    string $listSelCo[] = `listConnections -t historySwitch -s on -d off $selShape[0]`;
+    
+    // -- check nClothNode
+
+    clear($ncloth);
+
+    for($obj in $selShape)
+    {
+    string $current[]=`listConnections -t nCloth $obj`;
+
+        if(`size($current)`>0)
+        {
+            $ncloth[0] =$current[0];
+            break;
+            
+
+        }
+
+    }    
+	// -- If nClothNode found > assign the same nCache
+ 
+	if (`size($ncloth)` == 1)	
+   {
+    	
+        // -- assign the same shader
+	
+        string $meshShadersource[] = `listRelatives -s -ni $sel[$i]`;
+	    ART_transferObjShading $meshShadersource[0] $dupliShp;    	
+    	
+        // -- Find Ncache node
+        
+        string $nClothShape[] = `listRelatives -s $ncloth`;
+        string $listNCacheNode[] = stringArrayRemoveDuplicates (`listConnections -t cacheFile -s on -d off $nClothShape[0]`);
+
+        for($k=0; $k < size($sel); $k++)
+            {
+                
+            // -- Assign Ncache  node
+        
+            $switch = createHistorySwitch($dupliShp,false);
+            connectAttr ($listNCacheNode[0]+".outCacheData[0]") ($switch+".inPositions[0]");
+            connectAttr ($listNCacheNode[0]+".inRange") ($switch+".playFromCache"); 
+
+            }        
+
+    	
+    	}
+	
+	else
+	    {
+	
+	    //-- If nCloth cache doesn t  exist , but geoCache does, then assign the same geoCache
+
+        // -- assign the same shader
+
+	    ART_transferObjShading $selShape[0] $dupliShp; 
+
+        if (`size($listSelCo)`>0)
+            {
+		
+		    // -- Find GeoCache node
+		
+		    string $listCacheNode[] = stringArrayRemoveDuplicates (`listConnections -t cacheFile -s on -d off $listSelCo[0]`);
+    
+            for($j=0; $j < size($sel); $j++)
+            {
+                
+                // -- Assign Geocache node        
+        
+                $switch = createHistorySwitch($dupli[0],false);
+                connectAttr ($listCacheNode[0]+".outCacheData[0]") ($switch+".inPositions[0]");
+                connectAttr ($listCacheNode[0]+".inRange") ($switch+".playFromCache"); 
+
+            }
+    
+        }
+    else
+        {
+			
+		// -- If nCloth cache and geo cache don t exist, generate a new one.
+		
+        // -- create cache using the current timeLine in the sandbox folder 
+    
+        $userEnvName = `getenv "USER"`;
+        $cacheTmpDir = ("/u/lorax/Users/" + $userEnvName + "/Sandbox/Tmp");
+        $start = `playbackOptions -q -minTime`; 
+        $end   = `playbackOptions -q -maxTime`;
+        $tempArray = `filterExpand -fullPath true -sm 12 $sel[$i]`;
+    
+        $tempArray = `cacheFile -f $dupli[0] -dir $cacheTmpDir -st $start -et $end -singleCache -format "OneFile" -doubleToFloat -points $tempArray[0]`;
+        $cacheGeo[$i] = $tempArray[0];
+
+    
+        // -- assign the new cache created on the duplicated object
+    
+        string $switch = createHistorySwitch($dupli[0],false);
+        string $attachCache = `cacheFile -attachFile -f $tempArray[0] -dir $cacheTmpDir -cnm $selShape[0] -ia ($switch+".inp[0]")`;  
+        setAttr ($switch+".playFromCache") true;     
+    
+        } 
+
+    }
+    
+    appendStringArray ($isolateSel, $dupli, 1);
+}
+ 
+// -- isolate duplicated objects 
+    
+//select -r $isolateSel;
+//print $isolateSel;
+//$isolateObj = `enableIsolateSelect modelPanel4 true`;
+//clear ($isolateSel); 
+
+
+}

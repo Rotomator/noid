@@ -1,0 +1,864 @@
+//=============================================================================
+//
+//	Export Geo Cache - Script that exports/imports geometry cache from selection
+//					  - If selection is a group, takes all the hierarchy
+//					  - Keeps the openGL view frozen while exporting for fast export
+//					  - Creates a unique cache file
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.6
+//
+// Created  :    23/07/2010
+// Modified :    10/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AexportGeoCache" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that exports geometry cache from selection
+//		<< takes for arg the name of the cache file
+//		<< takes for arg the cache file's path
+//		<< takes for arg the start frame
+//		<< takes for arg the end frame
+//		<< takes for arg a boolean to attach a cacheNode to the objects
+//
+//-------------------------------------------------------------------------
+
+global proc A_exportGeoCache(string $cacheName, string $cachePath, int $startFr, int $endFr, int $createCacheNode)
+{
+    string $sel[];
+	string $objSel[];
+    string $cacheCmd;
+	string $cacheFile[];
+    string $cacheNode;
+	string $switch;
+	
+    
+	// ------------------------------------------------------------
+	// -- Set Timer start
+	//
+	$startTime = `timerX`;
+	
+	
+	// ------------------------------------------------------------
+    // -- Get all shapes from selection or hierachy
+	//
+	$objSel = `filterExpand -fullPath true -sm 12 -sm 10 -sm 9 -sm 68 (ls ("-sl"))`;
+	$sel 	= `ls -v -ni $objSel`;
+	
+    
+    if (!`size($sel)`)
+        error "Please select at least one Object to export !";
+    
+    
+	// ------------------------------------------------------------
+    // -- Create the cache command MANUALLY
+	//
+	/*
+    $cacheCmd = ("cacheFile -f \"" + $cacheName + "\" -dir \"" + $cachePath + "\" -st " + $startFr + " -et " + $endFr + " -singleCache -format \"OneFile\" -doubleToFloat");
+    
+	// Add the selected objects
+    for ($i=0; $i<size($sel); $i++)
+    {
+        $cacheCmd += (" -points \"" + $sel[$i] + "\"");
+    }
+	
+    // Launch export
+    //print $cacheCmd;
+    $cacheFile = eval($cacheCmd);
+	*/
+	
+	
+	// ------------------------------------------------------------
+    // -- Use the maya "doCreate..." command instead
+	//    (because it has file '2GB auto-segmentation', cache existing check, etc)
+	//
+	select -r $sel;
+	$cacheFile = `doCreateGeometryCache 5 { "3", $startFr, $endFr, "OneFile", "0", $cachePath,"0",$cacheName,"0", "export", "0", "1", "1","0","1","mcc" }`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Attach cacheNodes to the objects depending on $createCacheNode
+	//
+	if ($createCacheNode)
+	{
+		A_importGeoCache $cacheName $cachePath 0;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Stop Timer
+	//
+	$totalTime = `timerX -startTime $startTime`;
+	print ("\/\/ Total Time : "+$totalTime+"\n");
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that checks whether an object matches with a cache file's channel
+//		<< takes for arg the source object to match with the cache file
+//		<< takes for arg the name of the cache file
+//		<< takes for arg the cache file's path
+//
+//		>> returns the name of the channel that corresponds best to the source object
+//
+//-------------------------------------------------------------------------
+
+global proc string A_getCorrespObjFromCache(string $sourceObj, string $cacheName, string $cachePath)
+{
+	int    $fileExist;
+	string $filtObj[];
+	string $cacheChanlArr[];
+	string $cacheChannels;
+	string $shortObjName;
+	string $curCachChan;
+	string $nonumObjName;
+	
+	
+	// ------------------------------------------------------------
+	// -- Check whether cache file exists
+	//
+	$fileExist = `filetest -r ($cachePath + "/" + $cacheName + ".xml")`;
+	if (!$fileExist)
+	{
+		error "The cache file doesn't exist ! Please check the cache's path and name.";
+	}
+	
+	
+	// ------------------------------------------------------------
+    // -- Filter sourceObj's name and return shape
+	//
+	$filtObj = `filterExpand -fullPath true -sm 12 -sm 10 -sm 9 -sm 68 $sourceObj`;
+	$filtObj = `ls -v -ni $filtObj`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Get all file cache's channels
+	//
+	$cacheChanlArr = `cacheFile -f $cacheName -dir $cachePath -q -cnm`;
+	$cacheChannels = stringArrayToString($cacheChanlArr, " ");
+	
+	
+	// ------------------------------------------------------------
+	// -- Return $shortObjName if exact match, else return the closest match
+	//
+	$shortObjName = `match "[^|]*$" $filtObj[0]`; // removes pipes
+	$shortObjName = `substitute "^[^.]*:" $shortObjName ""`; // removes namespaces
+	
+	if ( `gmatch $cacheChannels ("*"+$shortObjName+"*")` )
+	{
+	    for ($curCachChan in $cacheChanlArr)
+	    {
+	       	if ( `gmatch $curCachChan ("*"+$shortObjName+"*")` )
+			{
+	       	    return $curCachChan;
+	       	}
+	    }
+	}
+	else
+	{
+		$nonumObjName = `substitute "[0-9]+" $shortObjName "[0-9]*"`;
+		$nonumObjName = `match $nonumObjName $cacheChannels`;
+		
+		if ($nonumObjName != "")
+		{
+			for ($curCachChan in $cacheChanlArr)
+			{
+				if ( `match $nonumObjName $curCachChan` != "" )
+				{
+					warning ("Channels in the given cache didn't match. Using channel \"" + $curCachChan + "\" on \"" + $sourceObj + "\" object !");
+					return $curCachChan;
+				}
+			}
+		}
+	}
+	
+	// ...Or return empty string if nothing matches
+	//
+	warning ("No channel in the given cache matches \"" + $sourceObj + "\" object. Skipping !");
+	return "";
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that imports geometry cache on selection
+//		<< takes for arg the name of the cache file
+//		<< takes for arg the cache file's path
+//		<< takes for arg a boolean to show process time or not
+//
+//-------------------------------------------------------------------------
+
+global proc A_importGeoCache(string $cacheName, string $cachePath, int $timerOn)
+{
+    float  $startTime;
+	int    $fileExist;
+    string $sel[];
+	string $objSel[];
+	string $matchChnl;
+    string $cacheNode;
+	string $switch;
+    string $cacheCmd;
+    float  $totalTime;
+	
+    
+	// ------------------------------------------------------------
+	// -- Set Timer start
+	//
+	if ($timerOn == 1)
+	{
+		$startTime = `timerX`;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Check whether cache file exists
+	//
+	$fileExist = `filetest -r ($cachePath + "/" + $cacheName + ".xml")`;
+	if (!$fileExist)
+	{
+		error "The cache file doesn't exist ! Please check the cache's path and name.";
+	}
+	
+	
+	// ------------------------------------------------------------
+    // -- Get all shapes from selection or hierachy
+	//
+	$objSel = `filterExpand -fullPath true -sm 12 -sm 10 -sm 9 -sm 68 (ls ("-sl"))`;
+	$sel 	= `ls -v -ni $objSel`;
+	
+    
+	// ------------------------------------------------------------
+	// -- Check selection size (error if empty or cut in parts if (too large)
+	//
+    if (!`size($sel)`)
+	{
+        error "Please select at least one Object to import cache on !";
+	}
+    
+	
+	// ------------------------------------------------------------
+	// -- Attach cacheNodes to the objects with a historySwitch
+	//
+    $cacheCmd = ("cacheFile -attachFile -f \"" + $cacheName + "\" -dir \"" + $cachePath + "\"");
+	
+	for ($i=0; $i<size($sel); $i++)
+	{
+		// Get from the XML the channel name that corresponds to the current obj
+		$matchChnl = A_getCorrespObjFromCache( $sel[$i], $cacheName, $cachePath );
+		
+		if ($matchChnl == "") {
+			continue;
+		}
+		
+		$cacheCmd += (" -cnm \"" + $matchChnl + "\"");
+		
+		$switch = createHistorySwitch($sel[$i],false);
+		$switch = `rename $switch "cacheSwitch#"`;
+		$cacheCmd += (" -ia \"" + $switch + ".inp[0]\"");
+		
+		setAttr ($switch+".playFromCache") true;
+	}
+	
+	// Launch command if containing at least one matching channel/object
+	if (`gmatch $cacheCmd "*-cnm*"`)
+	{
+			$cacheNode = eval($cacheCmd);
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Stop Timer
+	//
+	if ($timerOn == 1)
+	{
+		$totalTime = `timerX -startTime $startTime`;
+		print ("\/\/ Total Time : "+$totalTime+"\n");
+	}
+	
+	select -r $sel;
+}
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that SETS the cache files' path -- EXPORT
+//
+//-------------------------------------------------------------------------
+//
+global proc xpGC_setExpCachePath()
+{
+	string $window 			= "win_AexportGeoCache";
+	string $b_cachePath 	= ($window+"_cachePath");
+	string $filename[];
+	
+	
+	string $filename[] = `fileDialog2 -fileMode 3 -dialogStyle 2`;
+	
+	textFieldButtonGrp -e -tx $filename $b_cachePath;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that GETS cache files path -- IMPORT
+//
+//-------------------------------------------------------------------------
+//
+global proc xpGC_getImpCacheFile()
+{
+	string $window 			= "win_AexportGeoCache";
+	string $b_cachePth2 	= ($window+"_cachePth2");
+	string $b_cacheNam2	= ($window+"_cacheNam2");
+	string $multipleFilters;
+	string $filePath[];
+	string $cachePath;
+	string $cacheFile;
+	
+	
+	$multipleFilters = "XML Files (*.xml);;All Files (*.*)";
+	$filePath = `fileDialog2 -fileMode 1 -fileFilter $multipleFilters -selectFileFilter "XML Files" -dialogStyle 2`;
+	
+	$cachePath = `match "^.*/" $filePath[0]`; // stop at last "/"
+	
+	$cacheFile = `match "[^/\\]*$" $filePath[0]`; // take everything after the last "/" or "\"
+	$cacheFile = `match "^[^\.]*" $cacheFile`; // take everything before the "."
+	
+	textFieldButtonGrp -e -tx $cachePath $b_cachePth2;
+	textFieldGrp -e -tx $cacheFile $b_cacheNam2;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that Copies cache files path
+//
+//-------------------------------------------------------------------------
+//
+global proc xpGC_copyPath()
+{
+	string $window 			= "win_AexportGeoCache";
+	string $mainTabLyt 	= ($window+"_tabLyt");
+	string $b_cachePath 	= ($window+"_cachePath");
+	string $b_cachePth2 	= ($window+"_cachePth2");
+	string $b_cacheName	= ($window+"_cacheName");
+	string $b_cacheNam2	= ($window+"_cacheNam2");
+	string $cachePath;
+	string $cacheFile;
+	int    $mode;
+	
+	
+	// -- Ask for active Tab : Export(1) or Import(2)
+	//
+	$mode = `tabLayout -q -selectTabIndex $mainTabLyt`;
+	
+	
+	// -- Copy cache path+file from one tab to another
+	//
+	if ($mode == 2) // Active tab is now Import >> so copy caches from Export
+	{
+		$cachePath = `textFieldButtonGrp -q -tx $b_cachePath`;
+		textFieldButtonGrp -e -tx $cachePath $b_cachePth2;
+		
+		$cacheFile = `textFieldGrp -q -tx $b_cacheName`;
+		textFieldGrp -e -tx $cacheFile $b_cacheNam2;
+	}
+	else if ($mode == 1) // Active tab is now Export >> so copy caches from Import
+	{
+		$cachePath = `textFieldButtonGrp -q -tx $b_cachePth2`;
+		textFieldButtonGrp -e -tx $cachePath $b_cachePath;
+		
+		$cacheFile = `textFieldGrp -q -tx $b_cacheNam2`;
+		textFieldGrp -e -tx $cacheFile $b_cacheName;
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that enables/disables a control depending on a radioButtonGrp
+//
+//-------------------------------------------------------------------------
+//
+global proc xpGC_toggleRadio()
+{
+	string $window  = "win_AexportGeoCache";
+	string $r_timeRg  = ($window+"_timeRg");
+	string $b_start = ($window+"_start");
+	string $b_end   = ($window+"_end");
+	
+	
+	if (`radioButtonGrp -q -sl $r_timeRg` == 2)
+	{
+		intFieldGrp -e -en 1 $b_start;
+		intFieldGrp -e -en 1 $b_end;
+	}
+	else
+	{
+		intFieldGrp -e -en 0 $b_start;
+		intFieldGrp -e -en 0 $b_end;
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that LAUNCHES the script when hitting "CREATE" button
+//		<< takes for arg a boolean to export (0) or import (1) caches
+//
+//-------------------------------------------------------------------------
+//
+global proc xpGC_apply(int $mode)
+{
+	string $window			= "win_AexportGeoCache";
+	string $b_cachePath	= ($window+"_cachePath");
+	string $b_cacheName	= ($window+"_cacheName");
+	string $r_timeRg		= ($window+"_timeRg");
+	string $b_start			= ($window+"_start");
+	string $b_end			= ($window+"_end");
+	string $c_cNode			= ($window+"_cNode");
+	string $b_cachePth2	= ($window+"_cachePth2");
+	string $b_cacheNam2	= ($window+"_cacheNam2");
+	string $c_timer			= ($window+"_timer");
+	
+	string $cachePath 	 = `textFieldButtonGrp -q -tx $b_cachePath`;
+	string $cacheName	 = `textFieldGrp -q -tx $b_cacheName`;
+	int    $timeRg		 = `radioButtonGrp -q -sl $r_timeRg`;
+	int    $createCacheNode = `checkBoxGrp -q -v1 $c_cNode`;
+	int    $start;
+	int    $end	;
+	int    $tmpArray[];
+	string $cachePth2 	 = `textFieldButtonGrp -q -tx $b_cachePth2`;
+	string $cacheNam2	 = `textFieldGrp -q -tx $b_cacheNam2`;
+	int    $isTimerOn	 = `checkBoxGrp -q -v1 $c_timer`;
+	
+	
+	// -- Export (0) or Import (1) caches depending on $mode option
+	//
+	if (!$mode)
+	{
+		// -- Check the UI's options
+		//
+		if ($cachePath == "")
+		{
+			// Get current maya project's path
+			$cachePath = `workspace -q -rootDirectory`;
+			textFieldButtonGrp -e -tx $cachePath $b_cachePath;
+		}
+		if ($cacheName == "")
+		{
+			error "Please give a cache name !!";
+		}
+		
+		
+		// -- Get time values depending on Timerange radioButtonGrp
+		//
+		if ($timeRg == 1)
+		{
+			$start = `playbackOptions -q -minTime`; 
+			$end   = `playbackOptions -q -maxTime`;
+		}
+		else
+		{
+			$tmpArray = `intFieldGrp -q -v $b_start`;
+			$start = $tmpArray[0];
+			$tmpArray = `intFieldGrp -q -v $b_end`;
+			$end   = $tmpArray[0];
+		}
+		
+		
+		// -- Launch main proc
+		//
+		print ("\/\/ CMD : A_exportGeoCache \"" + $cacheName + "\" \"" + $cachePath + "\" " + $start + " " + $end + " " + $createCacheNode + "\n");
+		A_exportGeoCache $cacheName $cachePath $start $end $createCacheNode;
+	}
+	else
+	{
+		// -- Check the UI's options
+		//
+		if ($cachePth2 == "")
+		{
+			// Get current maya project's path
+			$cachePth2 	 = `workspace -q -rootDirectory`;
+			textFieldButtonGrp -e -tx $cachePth2 $b_cachePth2;
+		}
+		if ($cacheNam2 == "")
+		{
+			error "Please give a cache name !!";
+		}
+		
+		
+		// -- Launch main proc
+		//
+		print ("\/\/ CMD : A_importGeoCache \"" + $cacheNam2 + "\" \"" + $cachePth2 + "\" " + $isTimerOn + "\n");
+		A_importGeoCache $cacheNam2 $cachePth2 $isTimerOn;
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that calls the ABOUT window
+//
+//-------------------------------------------------------------------------
+//
+global proc AexportGeoCacheAbout(string $version)
+{
+	string $winAbout = "win_AexportGeoCache_about";
+
+	windowPref -enableAll false;
+
+	if (`window -exists $winAbout`)
+		deleteUI -window $winAbout;
+
+	$winAbout =`window -title "About..."
+		-iconName "About AexportGeoCache v1"
+		-toolbox true
+		-sizeable false
+		-widthHeight 300 300
+		-topEdge 256
+		-leftEdge 512
+		$winAbout`;
+
+	columnLayout -adjustableColumn true;
+
+		text -label "";
+		text -label " Script    : AexportGeoCache" -align "left";
+		text -label (" Version : "+ $version) -align "left";
+		text -label " Creator : Ali" -align "left";
+		text -label " Contact : chibi_ali@homtail.com" -align "left";
+		text -label "";
+		text -label "";
+		text -label " Features : " -align "left";
+		text -label "";
+		text -label " Exports/imports geometry cache from selection       " -align "left";
+		text -label "";
+		text -label " - If selection is a group, takes all the hierarchy" -align "left";
+		text -label " - Keeps 3D view frozen on export (faster)" -align "left";
+		text -label " - Creates a unique cache file" -align "left";
+		text -label "";
+
+	windowPref -enableAll true;
+	showWindow $winAbout;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc AexportGeoCache()
+{
+	string $version = "v1.5";
+	string $window = "win_AexportGeoCache";
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		windowPref -remove $window;
+
+		$window = `window 	-title 		("Export Geo Cache " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"AexportGeoCache"
+							-width 		310
+							-height 	280
+							-sizeable	true
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title 		("Export Geo Cache " + $version)
+							-iconName 	"AexportGeoCache"
+							-width 		310
+							-height 	280
+							-sizeable	true
+							$window`;
+	}
+	
+	
+
+	// -- Create a Form Layout to contain window's body
+	//
+	string $parentFrmLyt = `formLayout -numberOfDivisions 100 myFrmLyt`;
+	
+		// Create a Column Layout to contain the menu
+		//
+		string $parentCoLyt = `columnLayout -adjustableColumn true myCoLyt`;
+
+			// Create a menu for the window
+			//
+			string $menuBarLayout = `menuBarLayout`;
+			setParent ..;
+
+			//separator -height 10 -style "none";
+		
+		setParent ..;
+		
+		
+		// -- TAB Layout 
+		//
+		string $mainTabLyt = `tabLayout -innerMarginWidth 5 -innerMarginHeight 5 ($window+"_tabLyt")`;
+		
+		
+			// EXPORT Form layout
+			//
+			string $exFormLyt = `formLayout -numberOfDivisions 100 exportFormLyt01`;
+												
+				string $exCoLyt = `columnLayout -adjustableColumn true exCoLyt01`;
+				
+					// Fields
+					string $b_cachePath = `textFieldButtonGrp
+										-l "Cache Dir"
+										-ed 1
+										-bl " Browse "
+										-cw 1 85
+										-cw 3 55
+										-adj 2
+										-columnAttach 1 "left" 20
+										-columnAttach 1 "right" 5
+										-columnAttach 3 "left"  5
+										-columnAttach 3 "right" 5
+										-bc "xpGC_setExpCachePath"
+										($window+"_cachePath")`;
+		
+					string $b_cacheName = `textFieldGrp
+										-l "Cache Name"
+										-ed 1
+										-cw 1 85
+										-adj 2
+										-columnAttach 1 "left" 20
+										-columnAttach 2 "right" 5
+										($window+"_cacheName")`;
+				   
+				   separator -height 10 -style "none";
+				   
+					string $r_timeRg	 = `radioButtonGrp
+										-l "Time Range"
+										-vertical
+										-numberOfRadioButtons 2
+										-labelArray2 "Time Slider" "Start / End"
+										-select 1
+										-cw 1 70
+										-adj 2
+										-columnAttach 1 "left" 10
+										-columnAttach 2 "left" 5
+										-on1 "xpGC_toggleRadio"
+										-on2 "xpGC_toggleRadio"
+										($window+"_timeRg")`;
+	
+					string $b_start   = `intFieldGrp
+										-l "Start"
+										-enable 0
+										-cw 1 85
+										-cw 2 85
+										-columnAttach 1 "left" 20
+										-columnAttach 1 "right" 5
+										($window+"_start")`;
+	
+					string $b_end     = `intFieldGrp
+										-l "End"
+										-enable 0
+										-cw 1 85
+										-cw 2 85
+										-columnAttach 1 "left" 20
+										-columnAttach 1 "right" 5
+										($window+"_end")`;
+				   
+				   separator -height 10 -style "none";
+				   
+					string $c_cNode     = `checkBoxGrp
+										-l1 "Create Cache Nodes"
+										-v1 false
+										-columnAttach 1 "left" 87
+										($window+"_cNode")`;
+				setParent ..;
+				
+				
+				// Buttons
+				string $b_create = `button -label "Create" -w 150 -command "xpGC_apply(0)" ($window+"_create")`;
+				
+				string $b_close = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close")`;
+	
+			setParent ..;
+	
+	
+			// IMPORT Form layout
+			//
+			string $imFormLyt = `formLayout -numberOfDivisions 100 importFormLyt01`;
+												
+				string $imCoLyt = `columnLayout -adjustableColumn true imCoLyt01`;
+				
+					// Fields
+					string $b_cachePth2 = `textFieldButtonGrp
+										-l "Cache Dir"
+										-ed 1
+										-bl " Browse "
+										-cw 1 85
+										-cw 3 55
+										-adj 2
+										-columnAttach 1 "left" 20
+										-columnAttach 1 "right" 5
+										-columnAttach 3 "left"  5
+										-columnAttach 3 "right" 5
+										-bc "xpGC_getImpCacheFile"
+										($window+"_cachePth2")`;
+		
+					string $b_cacheNam2 = `textFieldGrp
+										-l "Cache Name"
+										-ed 1
+										-cw 1 85
+										-adj 2
+										-columnAttach 1 "left" 20
+										-columnAttach 2 "right" 5
+										($window+"_cacheNam2")`;
+				   
+				   separator -height 10 -style "none";
+				   separator -height 10 -style "none";
+				   
+				   string $c_timer = `checkBoxGrp
+				   						-l1 "Show Process Time"
+										-v1 false
+										-columnAttach 1 "left" 87
+										($window+"_timer")`;
+				setParent ..;
+				
+				
+				// Buttons
+				string $b_imprt = `button -label "Import" -w 150 -command "xpGC_apply(1)" ($window+"_imprt")`;
+				
+				string $b_close2 = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close2")`;
+	
+			setParent ..;
+		setParent ..;
+	
+	
+	
+	// -- Edits the MAIN FORM layout
+	//
+	formLayout -edit
+		-attachForm     $parentCoLyt	"top"     0
+		-attachForm     $parentCoLyt	"left"    0
+		-attachForm     $parentCoLyt	"right"   0
+		
+		-attachControl  $mainTabLyt	"top" 	  0 $parentCoLyt
+		-attachForm     $mainTabLyt	"left"    5
+		-attachForm     $mainTabLyt	"right"   5
+		-attachForm 	 $mainTabLyt	"bottom"  5
+		
+	$parentFrmLyt;
+	
+	
+	// -- Edits the TAB Layout
+	//
+	tabLayout -edit
+		-tabLabel $exFormLyt "Export"
+		-tabLabel $imFormLyt "Import"
+		-changeCommand "xpGC_copyPath"
+		
+	$mainTabLyt;
+	
+	
+	// -- Edits the EXPORT form layout
+	//
+	formLayout -edit
+		-attachForm		 $exCoLyt		"top" 	  5
+		-attachForm     $exCoLyt		"left"    5
+		-attachForm     $exCoLyt		"right"   5
+		-attachControl	 $exCoLyt		"bottom"  5 $b_create
+		
+		-attachNone		 $b_create    	"top" 	  
+		-attachForm     $b_create	    "left"    5
+		-attachPosition $b_create	    "right"   5 50
+		-attachForm     $b_create	    "bottom"  5
+		
+		-attachNone		 $b_close    	"top" 	  
+		-attachPosition $b_close	    "left"    5 50
+		-attachForm     $b_close	    "right"   5
+		-attachForm     $b_close	    "bottom"  5
+		
+	$exFormLyt;
+	
+	
+	// -- Edits the IMPORT form layout
+	//
+	formLayout -edit
+		-attachForm		 $imCoLyt		"top" 	  5
+		-attachForm     $imCoLyt		"left"    5
+		-attachForm     $imCoLyt		"right"   5
+		-attachControl	 $imCoLyt		"bottom"  5 $b_imprt
+		
+		-attachNone		 $b_imprt    	"top" 	  
+		-attachForm     $b_imprt	    "left"    5
+		-attachPosition $b_imprt	    "right"   5 50
+		-attachForm     $b_imprt	    "bottom"  5
+		
+		-attachNone		 $b_close2    	"top" 	  
+		-attachPosition $b_close2	    "left"    5 50
+		-attachForm     $b_close2	    "right"   5
+		-attachForm     $b_close2	    "bottom"  5
+		
+	$imFormLyt;
+	
+	
+	
+	// -- Edits the window's menu
+	//
+	setParent $menuBarLayout;
+		menu -label "Help" -helpMenu true;
+			menuItem -label "About..." -c ("AexportGeoCacheAbout \"" + $version + "\"") helpMit;
+	
+	
+	// -- Launch the window
+	//
+	showWindow $window;
+}
+

@@ -1,0 +1,74 @@
+//=============================================================================
+//
+//	AcleanMesh		- Script that cleans and freezes selected POLYs
+//					- User can select a hierarchy group >> only the visible polys children will be taken
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.3
+//
+// Created  :    05/08/2010
+// Modified :    09/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AcleanMesh" to launch the script
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+global proc AcleanMesh()
+{
+	string $sel[];
+	string $tempSel[];
+	string $curPar;
+	string $grdPar;
+	string $proxyPar;
+	string $proxyShp;
+	string $result[];
+	
+	
+	$sel = `filterExpand -fullPath true -sm 12 (ls ("-sl"))`;
+	$sel = `ls -visible $sel`;
+	
+	if (!size($sel)) {
+		error ("Please select at least one visible POLY object !");
+	}
+	
+	for ($curSel in $sel)
+	{
+		$tempSel  = `listRelatives -p -pa $curSel`;
+		$curPar   = $tempSel[0];
+		
+		delete -ch $curPar;
+		makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 $curPar;
+		$tempSel = `listRelatives -p -pa $curPar`;
+		$grdPar	= $tempSel[0];
+		
+		if ($grdPar == "")
+		{
+			$proxyPar = `createNode transform -n ($curPar + "_PXY")`;
+		}
+		else
+		{
+			$proxyPar = `createNode transform -parent $grdPar -n ($curPar + "_PXY")`;
+		}
+		
+		$proxyShp = `createNode mesh -n ($proxyPar+"Shape") -p $proxyPar`;
+		
+		connectAttr -f ($curSel + ".outMesh") ($proxyShp + ".inMesh");
+		//sets -e -forceElement initialShadingGroup $proxyPar;
+		ART_transferObjShading( $curSel, $proxyShp );
+		$result = `duplicate -n ($curPar + "_PXYD") $proxyPar`;
+		
+		delete $curPar;
+		delete $proxyPar;
+		rename $result $curPar;
+	}
+}
+

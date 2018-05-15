@@ -1,0 +1,10 @@
+
+
+global proc launchStickyOG()
+{
+	//catch(`loadPlugin "/u/mgl/releases.SuSE-11.1/maya/maya2011-x64/current/plug-ins/mglClosestPointOnMeshNode.so"`);
+	//catch(`loadPlugin "/u/mgl/maya2011-x64/plug-ins/linux/pointOnMeshInfo.so"`);
+	catch(`loadPlugin "c:/Program Files/Autodesk/maya2016/bin/plug-ins/nearestPointOnMesh.mll"`);
+	
+	performStickyDeformer 0;
+}

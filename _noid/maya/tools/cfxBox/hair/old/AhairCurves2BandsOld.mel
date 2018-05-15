@@ -1,0 +1,897 @@
+//=============================================================================
+//
+//	HairCurves 2 Bands	- Script that converts selected Nurbs CURVES to Poly BANDS
+//						- Filters only the curves that are on the "inside" part of the Reference mesh
+//						- Definition and width of resulting mesh (polyBANDS) can be customized
+//						- Extends the Bands to have one extra face inside the skin
+//						- Keeps the initial Nurbs CURVES selection order in an ExtraAttribute
+//						- Keeps the base vtx of all polyBANDS in an ExtraAttribute
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.32
+//
+// Modified :    06/08/2010
+// Modified :    06/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AhairCurves2Bands" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that duplicates curves that are on the "inside" part of a mesh
+//		<< takes for arg the reference mesh
+//		<< takes for arg the list of the curves to be tested
+//		<< takes for arg the distance (with nearest Vtx) beyond which the curve is ignored
+//
+//		>> returns the duplicated curves
+//
+//-------------------------------------------------------------------------
+
+global proc string[] hC2B_duplIfCurveOnMesh(string $refObj, string $curvSel[], float $maxDist)
+{
+	string $tempArray[];
+	string $curvList[];
+	string $vtxBorder[];
+	string $closestPOM;
+	float  $epPos[];
+	int    $closestVtxOnRef;
+	float  $closVtxPos[];
+	float  $deltaPos[];
+	float  $epVtxDist;
+	string $isVtxSelected[];
+	string $curvIsOnMesh[];
+	
+	
+	// -- Check arguments
+	//
+	if ( $refObj == "" )
+	{
+		error ("No Reference mesh given !");
+	}
+	else
+	{
+		$tempArray = `filterExpand -fullPath false -sm 12 $refObj`;
+		
+		if (!size($tempArray)) {
+			error ("Please give a POLYGONAL object as Reference !");
+		}
+	}
+	
+	
+	if ( !size($curvSel) )
+	{
+		error "Please select at least one NURBS Curve to convert !";
+	}
+	else
+	{
+		$curvList = `filterExpand -fullPath false -sm 09 $curvSel`;
+		$curvList = `ls -visible $curvList`;
+		
+		if (!`size($curvList)`)
+		{
+			error "Please select at least one visible NURBS Curve to convert !";
+		}
+	}
+	
+	
+	if ( !$maxDist )
+	{
+		$maxDist = 0.01;
+	}
+	
+	
+	// -- Get all the vtx at the border
+	//
+	select -r ($refObj + ".vtx[*]");
+	polySelectBorderShell 1;
+	$vtxBorder = `ls -flatten -sl`;
+	
+	
+	// -- Create closestPointOnMesh and connect $refObj as reference object
+	//
+	$closestPOM = createNode("closestPointOnMesh");
+	connectAttr -f ($refObj + ".outMesh") ($closestPOM + ".inMesh");
+	
+	
+	// -- Get the curves that are on the "inside" part of the mesh (ignoring the borders)
+	//
+	for ($curCurv in $curvList)
+	{
+		// Get the closest vtx to each curve's base (curve.ep[0])
+		$epPos = `pointPosition -w ($curCurv + ".ep[0]")`;
+		setAttr ($closestPOM + ".inPosition") $epPos[0] $epPos[1] $epPos[2];
+		$closestVtxOnRef = `getAttr ($closestPOM + ".closestVertexIndex")`;
+		
+		// Check the distance between curve's base and the closest mesh vtx
+		$closVtxPos = `pointPosition -w ($refObj + ".vtx["+$closestVtxOnRef+"]")`;
+		$deltaPos = {($closVtxPos[0]-$epPos[0]), ($closVtxPos[1]-$epPos[1]), ($closVtxPos[2]-$epPos[2])};
+		$epVtxDist = `mag <<$deltaPos[0], $deltaPos[1], $deltaPos[2]>>`;
+		
+		if ($epVtxDist > $maxDist) {
+			continue;
+		}
+		
+		// Keep curve only if vertex is not at border
+		select -r $vtxBorder;
+		clear $isVtxSelected;
+		$isVtxSelected = `ls -sl ($refObj + ".vtx["+$closestVtxOnRef+"]")`;
+		
+		if (!`size($isVtxSelected)`)
+		{
+			// Duplicate Curve
+			$tempArray = `duplicate $curCurv`;
+			
+			// Add Extra Attribute
+			if (!`attributeExists "referenceCurve" $tempArray[0]`) {
+				addAttr -ln "referenceCurve" -dt "string" $tempArray[0];
+			}
+			if (`getAttr -l ($tempArray[0] + ".referenceCurve")`) {
+				setAttr -l off ($tempArray[0] + ".referenceCurve");
+			}
+			setAttr -type "string" ($tempArray[0] + ".referenceCurve") $curCurv;
+			setAttr -l on ($tempArray[0] + ".referenceCurve");
+			
+			// Add Extra Attribute
+			if (!`attributeExists "closestVtx" $tempArray[0]`) {
+				addAttr -ln "closestVtx" -dt "string" $tempArray[0];
+			}
+			if (`getAttr -l ($tempArray[0] + ".closestVtx")`) {
+				setAttr -l off ($tempArray[0] + ".closestVtx");
+			}
+			setAttr -type "string" ($tempArray[0] + ".closestVtx") ($refObj + ".vtx["+$closestVtxOnRef+"]");
+			setAttr -l on ($tempArray[0] + ".closestVtx");
+			
+			// Keep curve
+			$curvIsOnMesh[size($curvIsOnMesh)] = $tempArray[0];
+		}
+	}
+	
+	
+	// -- Return all the curves that are "inside" the refObj
+	//
+	delete $closestPOM;
+	select -r $curvIsOnMesh;
+	return $curvIsOnMesh;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that rounds a float value
+//		<< takes for arg the float value
+//		<< takes for arg the wanted number of decimals (ie. 3 = 0.451)
+//
+//		>> returns the rounded value
+//
+//-------------------------------------------------------------------------
+
+global proc float hC2B_round(float $val,float $dec)
+{
+	$sign = `sign $val`;
+	float $dec = `pow 10 $dec`;
+	$val = (int) (($val + $sign*5/($dec*10)) * $dec);
+	$val = ($val / $dec);
+	
+	return $val;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that compares 2 normals directions
+//		<< takes for arg a polyObject [A] to check its normals
+//		<< takes for arg a vertex on a ReferenceObject [B] which normals serves as reference
+//
+//		>> returns a float value (dotProduct of both surface normals)
+//		   POSITIVE = normals in SAME direction
+//		   NEGATIVE = normals in OPPOSITE direction
+//
+//-------------------------------------------------------------------------
+
+global proc float hC2B_compareNormalsDirSimple(string $loftPoly, string $matchVtx)
+{
+	string $test1[];
+	string $test2[];
+	string $vtxNum;
+	float  $normVtxBandA[];
+	float  $normVtxRefA[];
+	float  $normVtxBandB[3];
+	float  $normVtxRefB[3];
+	float  $dotProd;
+	
+	
+	// -- Check arguments
+	//
+	$test1 = `filterExpand -sm 12 $loftPoly`;
+	$test2 = `filterExpand -sm 31 $matchVtx`;
+	
+	if ( !size($test1) )
+	{
+		error ("Please give a POLYGON object to check its normals !");
+	}
+	if ( !size($test2) )
+	{
+		error ("Please give a VERTEX which normals will serve as reference !");
+	}
+	
+	
+	// -- Get the normal values of $loftPoly.vtx[4] because 4 is always the one at the middle of the lofted polyBand
+	//
+	$vtxNum = 4;
+	
+	
+	// -- Get the dot product of the 2 vtx's normals
+	//    >> positive value = same direction
+	//
+	$normVtxBandA = `polyNormalPerVertex -q -normalXYZ ($loftPoly + ".vtx["+$vtxNum+"]")`;
+	$normVtxRefA  = `polyNormalPerVertex -q -normalXYZ $matchVtx`;
+	
+	$normVtxBandB[0] = $normVtxBandA[0];
+	$normVtxBandB[1] = $normVtxBandA[1];
+	$normVtxBandB[2] = $normVtxBandA[2];
+	$normVtxRefB[0]  = $normVtxRefA[0];
+	$normVtxRefB[1]  = $normVtxRefA[1];
+	$normVtxRefB[2]  = $normVtxRefA[2];
+	
+	$dotProd = `dotProduct $normVtxBandB $normVtxRefB 0`;
+	
+	
+	// -- Return the dot product
+	//
+	return $dotProd;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that converts nurbs Curves to poly bands
+//		<< takes for arg the list of the curves to be converted
+//		<< takes for arg the object that the curves will be attached to
+//		<< takes for arg the number of spans that will define the resulting mesh (the band)
+//		<< takes for arg the width in scene's units of the resulting mesh (the band)
+//
+//		>> returns the resulting generated mesh
+//
+//-------------------------------------------------------------------------
+
+global proc string hC2B_createBands(string $curvSel[], string $refObj, int $numOfSpans, float $bandWidth)
+{
+	string $sel[];
+	string $test1[];
+	string $tempArray[];
+	string $refObjCleanName;
+	string $rootGrp;
+	string $folcGrp;
+	string $tmpRefUVBand;
+	string $isoCurvRef1;
+	string $isoCurvRef2;
+	string $fixCurv;
+	float  $epPos[];
+	float  $curvArcLen;
+	string $matchVtx;
+	string $matchVtxID;
+	float  $matchVtxUVs[2];
+	string $locat01;
+	string $locat02;
+	string $offsetCurv;
+	string $loftNurbs;
+	string $isoOffCurv1;
+	string $isoOffCurv2;
+	string $loftPoly;
+	string $loftPolyList[];
+	float  $normalsDir;
+	string $combOrder;
+	string $initCurves[];
+	string $result;
+	
+	
+	// -- Get all nurbs Curves from selection or hierachy
+	//
+	if ( !size($curvSel) )
+	{
+		error "Please select at least one NURBS Curve to convert !";
+	}
+	else
+	{
+		$sel = `filterExpand -fullPath false -sm 09 $curvSel`;
+		$sel = `ls -visible $sel`;
+		
+		if (!`size($sel)`)
+		{
+			error "Please select at least one visible NURBS Curve to convert !";
+		}
+	}
+	
+	
+	// -- Check arguments
+	//
+	if ( $refObj == "" )
+	{
+		error ("No Reference mesh given !");
+	}
+	else
+	{
+		$test1 = `filterExpand -sm 12 $refObj`;
+		
+		if (!size($test1)) {
+			error ("The Reference mesh must be a POLYGONAL object !");
+		}
+	}
+	
+	if ( !$numOfSpans || !$bandWidth )
+	{
+		error ("Please give non zero values for Spans number and/or Band's width !");
+	}
+	
+	
+	// -- Remove any existing nameSpace
+	//
+	if (`gmatch $refObj "*:*"`) {
+		$refObjCleanName = `substitute "^[^.]*:" $refObj ""`;
+	}
+	else {
+		$refObjCleanName = $refObj;
+	}
+	
+	
+	// -- Create a temp poly BAND that will serve as reference to all poly BADNS' UVs
+	//
+	$tempArray = `duplicate $sel[0]`;
+	$tempArray = `rebuildCurve -spans ($numOfSpans+1) -ch 0 -replaceOriginal 1 -rt 0 -end 1 -kr 0 -kcp 0 -kep 1 -kt 0 -d 3 -tol 0.05 $tempArray[0]`;
+	$isoCurvRef1 = $tempArray[0];
+	
+	$tempArray = `duplicate $isoCurvRef1`;
+	$isoCurvRef2 = $tempArray[0];
+	setAttr ($isoCurvRef2 + ".translateX") 0.1;
+	
+	// Set nurbs2poly conversion options to "general" "quad" and 1 U/V "per span# of iso params"
+	nurbsToPolygonsPref -f 2 -polyType 1 -uType 3 -vType 3 -uNumber 1 -vNumber 1 -useChordHeight 0 -ucr 0 -mrt 0 -es 0;
+	
+	$tempArray = `loft -n ($sel[0] + "_polyLoftRef") -polygon 1 -degree 1 -ch 0 -u 1 -c 0 -ar 1 -ss 1 -rn 0 -rsn true $isoCurvRef1 $isoCurvRef2`;
+	$tmpRefUVBand = $tempArray[0];
+	delete $isoCurvRef1 $isoCurvRef2;
+	
+	
+	// -- Create a BAND for each Nurbs TUBE
+	//
+	$rootGrp = `createNode transform -n ($refObjCleanName + "_BANDS#")`;
+	$folcGrp = `createNode transform -n ($refObjCleanName + "_FOLIC#") -p $rootGrp`;
+	
+	for ($curSel in $sel)
+	{
+		// -- Check that the given curve has the extraAttr containing the closest Vtx on Ref surface
+		if (!`attributeExists "closestVtx" $curSel`) {
+			error ("The Curve \""+$curSel+"\" must have a \"closestVtx\" extra attribute !");
+		}
+		
+		// -- Check that the given curve has the extraAttr containing the original GUIDE Curve's name
+		if (!`attributeExists "referenceCurve" $curSel`) {
+			error ("The Curve \""+$curSel+"\" must have a \"referenceCurve\" extra attribute !");
+		}
+		
+		// -- Duplicate the guide curve with new definition (depends of $numOfSpans)
+		//
+		//$tempArray = `duplicate -n ($curSel + "_FIX") $curSel`;
+		$tempArray = `rebuildCurve -spans $numOfSpans -ch 0 -replaceOriginal 1 -rt 0 -end 1 -kr 0 -kcp 0 -kep 1 -kt 0 -d 3 -tol 0.05 $curSel`;
+		$fixCurv = $tempArray[0];
+		
+		// Set the pivot at the 1st point
+		$epPos = `pointPosition -w ($fixCurv + ".ep[0]")`;
+		xform -piv $epPos[0] $epPos[1] $epPos[2] $fixCurv;
+		
+		// Extend the curves with the same distance as the one between 2 Points
+		$curvArcLen = `arclen -ch 0 $fixCurv`;
+		$curvArcLen = $curvArcLen / $numOfSpans;
+		$curvArcLen = hC2B_round($curvArcLen, 2);
+		
+		$tempArray = `extendCurve -cos 0 -ch 0 -em 0 -et 2 -d $curvArcLen -s 1 -jn false -rpo false $fixCurv`;
+		attachCurve -ch 0 -rpo true -kmk true -method 0 $fixCurv $tempArray[0];
+		// Delete the extention curve
+		delete $tempArray[0];
+		reverseCurve -ch 0 -rpo true $fixCurv;
+		xform -piv $epPos[0] $epPos[1] $epPos[2] $fixCurv;
+		
+		
+		// -- Create a follicule on the vtx corresponding to the curve's base
+		//
+		$matchVtx    = `getAttr ($fixCurv + ".closestVtx")`;
+		// Get only the vertex ID (ie. "1383" from "emitterFront_wrap.vtx[1383]") 
+		$matchVtxID  = `substitute "^[^[]*\\[" $matchVtx ""`;
+		$matchVtxID  = `substitute "\\].*" $matchVtxID ""`;
+		$tempArray   = `polyListComponentConversion -fv -tuv $matchVtx`;
+		$matchVtxUVs = `polyEditUV -q $tempArray[0]`;
+		
+		string $fol  = `createNode transform -p $folcGrp -n ("fol_"+ $refObjCleanName +"_v"+ $matchVtxID)`;
+		string $folS = `createNode follicle -p $fol -n ($fol + "Shape")`;
+		
+		connectAttr -f ($refObj + ".worldMatrix[0]") ($folS + ".inputWorldMatrix");
+		connectAttr -f ($refObj + ".worldMesh[0]") ($folS + ".inputMesh");
+		connectAttr -f ($folS + ".outRotate") ($fol + ".rotate");
+		connectAttr -f ($folS + ".outTranslate") ($fol + ".translate");
+		
+		setAttr ($folS + ".parameterU") $matchVtxUVs[0];
+		setAttr ($folS + ".parameterV") $matchVtxUVs[1];
+		
+		
+		// -- Offset a second curve from the 1st one
+		//
+		$tempArray = `duplicate $fixCurv`;
+		$offsetCurv = $tempArray[0];
+		
+		$tempArray = `spaceLocator`;
+		$locat01 = $tempArray[0];
+		parent $locat01 $fol;
+		makeIdentity -apply false -t 1 -r 1 -s 1 -n 0 $locat01; // Only RESET the values, don't freeze !
+		parent $fixCurv $locat01;
+		
+		$tempArray = `spaceLocator`;
+		$locat02 = $tempArray[0];
+		parent $locat02 $fol;
+		makeIdentity -apply false -t 1 -r 1 -s 1 -n 0 $locat02;
+		parent $offsetCurv $locat02;
+		
+		setAttr ($locat02 + ".translateX") $bandWidth; // the offset is LOCAL due to parent $locat02
+		
+		
+		// -- Loft a polyPlane (= Band) from the 2 curves
+		//
+		// Set nurbs2poly conversion options to "general" "quad" and 1 U/V "per span# of iso params"
+		nurbsToPolygonsPref -f 2 -polyType 1 -uType 3 -vType 3 -uNumber 1 -vNumber 1 -useChordHeight 0 -ucr 0 -mrt 0 -es 0;
+		
+		$tempArray = `loft -n ($fixCurv + "_BAND") -polygon 1 -degree 1 -ch 0 -u 1 -c 0 -ar 1 -ss 1 -rn 0 -rsn true $offsetCurv $fixCurv`;
+		$loftPoly = $tempArray[0];
+		
+		// Offset slightly the follicle to avoid animation "plops" and attach the BAND to it
+		xform -piv $epPos[0] $epPos[1] $epPos[2] $loftPoly;
+		setAttr ($folS + ".parameterU") ($matchVtxUVs[0] -0.0002);
+		setAttr ($folS + ".parameterV") ($matchVtxUVs[1] -0.0002);
+		parent $loftPoly $fol;
+		
+		// Get UVs from $tmpRefUVBand and Rotate + scale them
+		setToolTo selectSuperContext; // to avoid warnings when selecting UVs
+		transferAttributes -pos 0 -nml 0 -uvs 2 -col 2 -spa 4 -sus "map1" -tus "map1" -flipUVs 0 -clb 1 $tmpRefUVBand $loftPoly;
+		delete -ch $loftPoly;
+		
+		select -r ($loftPoly + ".map[*]");
+		polyRotateUVs -90;
+		polyEditUV -pu 0.5 -pv 0.5 -su 0.90 -sv 0.90; // to avoid unwanted color wraps on borders
+		select -cl;
+		setAttr ($loftPoly + ".doubleSided") 0;
+		
+		// Reverse object normals if they aren't in the same direction as REFERENCE object
+		$normalsDir = `hC2B_compareNormalsDirSimple $loftPoly $matchVtx`;
+		
+		if ($normalsDir < 0) {
+			polyNormal -nm 4 -ch 0 $loftPoly;
+		}
+		
+		// Get the list of all lofted poly bands and selection order
+		$loftPolyList[size($loftPolyList)] = $loftPoly;
+		$combOrder += (`getAttr ($fixCurv + ".referenceCurve")` + " ");
+		
+		delete $fixCurv $offsetCurv $locat01 $locat02;
+	}
+	
+	
+	// -- Delete the temp polyBAND
+	//
+	delete $tmpRefUVBand;
+	
+	
+	// -- Combine all the bands into one mesh (in case of multi selection)
+	//
+	if (`size($sel)` != 1)
+	{
+		$tempArray = `polyUnite -n ($refObjCleanName + "_BAND#") -ch 1 $loftPolyList`;
+		$result = $tempArray[0];
+		setAttr ($result + ".doubleSided") 0;
+		parent $result $rootGrp;
+	}
+	else
+	{
+		$loftPoly = `rename $loftPoly ($refObjCleanName + "_BAND#")`;
+		$result = $loftPoly;
+	}
+	
+	
+	// -- Add extra Attributes to the resulting mesh 
+	//
+	// Will contain the ordered list of nurbs Curves (will serve later on for "bands2Curves" wrap)
+	addAttr -ln "combineOrder" -dt "string" $result;
+	setAttr -type "string" ($result + ".combineOrder") $combOrder;
+	setAttr -lock on ($result + ".combineOrder");
+	
+	
+	// -- Create a Set containing the list of nurbs Curves
+	//
+	$initCurves = stringToStringArray($combOrder, " ");
+	sets -n ("CURV_"+ $refObjCleanName +"_Set#") $initCurves;
+	
+	
+	// -- Return the generated mesh
+	//
+	select -r $result;
+	return $result;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that duplicates CURVES (those "inside"/"on" the mesh) and converts them to poly BANDS
+//		<< takes for arg the list of the curves to be converted
+//		<< takes for arg the mesh that the curves will be attached to
+//		<< takes for arg the number of spans that will define the resulting mesh (the band)
+//		<< takes for arg the width in scene's units of the resulting mesh (the band)
+//		<< takes for arg the distance (with reference mesh) beyond which the curve is considered too far and ignored
+//
+//		>> returns the resulting generated mesh
+//
+//-------------------------------------------------------------------------
+
+global proc string A_hairCurves2Bands(string $curvSel[], string $refObj, int $numOfSpans, float $bandWidth, float $maxDist)
+{
+	string $dupliCurv[];
+	string $texWinName[];
+	string $result;
+	
+	
+	// -- Set Timer start
+	//
+	$startTime = `timerX`;
+	
+	
+	// -- Close UVTexture Editor if open (really really faster!)
+	//
+	$texWinName = `getPanel -sty polyTexturePlacementPanel`;
+	// disable it if it's in embedded in a layout (like perspView)
+	removeTextureWindow $texWinName[0];
+	
+	// close it if it's a separate window
+	if ( `window -exists polyTexturePlacementPanel1Window` ) {
+		deleteUI -window polyTexturePlacementPanel1Window;
+	}
+	
+	
+	// -- Duplicate curves that are on the "inside" part of $refObj
+	//
+	$dupliCurv = hC2B_duplIfCurveOnMesh( $refObj, $curvSel, $maxDist );
+	
+	if (!`size($dupliCurv)`)
+	{
+		error ("The selected curves are too far from Reference Mesh ! Please select closer curves or change \"Max Dist\" !");
+	}
+	
+	
+	// -- Convert the duplicated nurbs Curves to poly bands
+	//
+	$result = hC2B_createBands( $dupliCurv, $refObj, $numOfSpans, $bandWidth);
+	
+	
+	// -- Stop Timer
+	//
+	$totalTime = `timerX -startTime $startTime`;
+	print ("\/\/ Total Time : "+$totalTime+"\n");
+	
+	
+	// -- Return the generated mesh
+	//
+	select -r $result;
+	return $result;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh
+//
+//-------------------------------------------------------------------------
+//
+global proc hC2B_getRefMesh()
+{
+	string $window 		= "win_AhairCurves2Bands";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $sel[];
+	
+	
+	$sel = `filterExpand -fullPath false -sm 12 (ls ("-sl"))`;
+	
+    if (!`size($sel)`)
+	{
+        error "Please select one POLYGONAL Object !";
+	}
+	
+	textFieldButtonGrp -e -tx $sel[0] $b_refMesh;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that LAUNCHES the script when hitting "CREATE" button
+//
+//-------------------------------------------------------------------------
+//
+global proc hC2B_apply()
+{
+	string $window		= "win_AhairCurves2Bands";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $b_spanNum	= ($window+"_spanNum");
+	string $b_bandWdt  = ($window+"_bandWdt");
+	string $b_maxDist	= ($window+"_maxDist");
+	
+	string $refMesh 	= `textFieldButtonGrp -q -tx $b_refMesh`;
+	int    $spanNum		= `intFieldGrp -q -v1 $b_spanNum`;
+	float  $bandWidth 	= `floatFieldGrp -q -v1 $b_bandWdt`;
+	float  $maxDist	 	= `floatFieldGrp -q -v1 $b_maxDist`;
+	string $curvSel[];
+	
+	
+	$curvSel = `ls -sl`;
+	
+	// -- Launch main proc
+	//	
+	print ("\/\/ CMD : A_hairCurves2Bands ({\"FirstSelection\", \"SecondSelection\", ...}, \"" + $refMesh + "\", " + $spanNum + ", " + $bandWidth + ", " + $maxDist + ") \n");
+	A_hairCurves2Bands($curvSel, $refMesh, $spanNum, $bandWidth, $maxDist);
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that calls the ABOUT window
+//
+//-------------------------------------------------------------------------
+//
+global proc AhairCurves2BandsAbout(string $version)
+{
+	string $winAbout = "win_AhairCurves2Bands_about";
+
+	windowPref -enableAll false;
+
+	if (`window -exists $winAbout`)
+		deleteUI -window $winAbout;
+
+	$winAbout =`window -title "About..."
+		-iconName "About win_AhairCurves2Bands"
+		-toolbox true
+		-sizeable false
+		-widthHeight 300 300
+		-topEdge 256
+		-leftEdge 512
+		$winAbout`;
+
+	columnLayout -adjustableColumn true;
+
+		text -label "";
+		text -label " Script    : AhairCurves2Bands" -align "left";
+		text -label (" Version : "+ $version) -align "left";
+		text -label " Creator : Ali" -align "left";
+		text -label " Contact : chibi_ali@homtail.com" -align "left";
+		text -label "";
+		text -label "";
+		text -label " Features : " -align "left";
+		text -label "";
+		text -label " Converts selected Nurbs CURVES to Poly BANDS" -align "left";
+		text -label "";
+		text -label " - Filters only the curves that are on the \"inside\" part of the Reference mesh" -align "left";
+		text -label " - Change number of spans to change resulting polyBANDS' definition" -align "left";
+		text -label " - Change width number (in scene units) to change polyBANDS' width" -align "left";
+		text -label " - Extends polyBANDS mesh to have one extra face inside the skin" -align "left";
+		text -label " - Adds an ExtraAttr on polyBANDS that'll contain their base vtx IDs" -align "left";
+		text -label " - Adds an ExtraAttr on polyBANDS that'll contain the initial CURVES selection order" -align "left";
+		text -label "  (>> will serve to find the initial nurbs Curves and wrap them on the poly Bands )" -align "left";
+		text -label "";
+
+	windowPref -enableAll true;
+	showWindow $winAbout;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc AhairCurves2Bands()
+{
+	string $version = "v1.32";
+	string $window = "win_AhairCurves2Bands";
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		windowPref -remove $window;
+
+		$window = `window 	-title 		("HairCurves 2 Bands " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"AhairCurves2Bands"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title 		("HairCurves 2 Bands " + $version)
+							-iconName 	"AhairCurves2Bands"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	
+	
+
+	// -- Create a Form Layout to contain window's body
+	//
+	string $parentFrmLyt = `formLayout -numberOfDivisions 100 myFrmLyt`;
+	
+		// Create a Column Layout to contain the menu
+		//
+		string $parentCoLyt = `columnLayout -adjustableColumn true myCoLyt`;
+
+			// Create a menu for the window
+			//
+			string $menuBarLayout = `menuBarLayout`;
+			setParent ..;
+
+			//separator -height 10 -style "none";
+		
+		setParent ..;
+		
+		
+		// Body layout
+		//
+		//string $bodyLyt = `columnLayout -adjustableColumn true exCoLyt01`;
+		string $bodyLyt = `scrollLayout -w 420 -h 200 bodyLyt01`;
+		
+			// Fields
+			separator -height 10 -style "none";
+			
+			string $b_refMesh = `textFieldButtonGrp
+								-l "Reference Mesh"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "The reference mesh to which curves will be attached"
+								-bc "hC2B_getRefMesh"
+								($window+"_refMesh")`;
+
+			separator -height 10 -style "none";
+			
+			string $b_spanNum  = `intFieldGrp
+								-l "Num of Spans"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-v1 5
+								-ann "Change number of spans to change resulting mesh definition"
+								($window+"_spanNum")`;
+		   
+			string $b_bandWdt  = `floatFieldGrp
+								-l "Band Width"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-precision 2
+								-v1 0.07
+								-ann "The width (in scene's units) of the resulting mesh "
+								($window+"_bandWdt")`;
+			
+			separator -height 10 -style "none";
+			
+			string $b_maxDist  = `floatFieldGrp
+								-l "Curve Max Dist"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-precision 3
+								-v1 0.003
+								-ann "The distance (with reference mesh) beyond which the curve is considered too far and ignored"
+								($window+"_maxDist")`;
+			
+		setParent ..;
+		
+		
+		// Buttons
+		//
+		string $b_create = `button -label "Create" -w 150 -command "hC2B_apply" ($window+"_create")`;
+		
+		string $b_close = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close")`;
+
+	setParent ..;
+	
+	
+	
+	// -- Edits the MAIN FORM layout
+	//
+	formLayout -edit
+		-attachForm     $parentCoLyt	"top"     0
+		-attachForm     $parentCoLyt	"left"    0
+		-attachForm     $parentCoLyt	"right"   0
+		
+		-attachControl  $bodyLyt		"top" 	  0 $parentCoLyt
+		-attachForm     $bodyLyt		"left"    5
+		-attachForm     $bodyLyt		"right"   5
+		-attachControl	 $bodyLyt		"bottom"  5 $b_create
+		
+		-attachNone		 $b_create    	"top" 	  
+		-attachForm     $b_create	    "left"    5
+		-attachPosition $b_create	    "right"   5 50
+		-attachForm     $b_create	    "bottom"  5
+		
+		-attachNone		 $b_close    	"top" 	  
+		-attachPosition $b_close	    "left"    5 50
+		-attachForm     $b_close	    "right"   5
+		-attachForm     $b_close	    "bottom"  5
+		
+	$parentFrmLyt;
+	
+	
+	// -- Edits the window's menu
+	//
+	setParent $menuBarLayout;
+		menu -label "Help" -helpMenu true;
+			menuItem -label "About..." -c ("AhairCurves2BandsAbout \"" + $version + "\"") helpMit;
+	
+	
+	// -- Launch the window
+	//
+	showWindow $window;
+}
+

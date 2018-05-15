@@ -1,0 +1,108 @@
+//=============================================================================
+//
+//	Edges to Curves		- Script that converts selected poly edges to nurbs curves
+//						- User can select multiple edges
+//						- The script will select the contiguous edeges per selected edge
+//						- The script will generate one curve per group of contiguous edges
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.0
+//
+// Created  :    15/09/2010
+// Modified :    15/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "Aedges2Curves" to launch the script
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+//-------------------------------------------------------------------------
+//
+// Procedure that converts selected poly edges to nurbs curves
+//
+//		>> returns the created curves list
+//
+//-------------------------------------------------------------------------
+
+global proc string[] Aedges2Curves()
+{
+	string $sel[];
+	string $curvesGrp;
+	string $texWinName[];
+	string $curSel;
+	string $tempSel[];
+	string $curCurve;
+	string $result[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Check selection
+	//
+	$sel = `filterExpand -fullPath true -sm 32 (ls ("-sl"))`;
+	
+	if (!size($sel)) {
+		error ("Please select at least one poly Edge !");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Create a group that will contiain all created curves
+	//
+	$curvesGrp = `createNode transform -n "edges2Curves_Grp#"`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Close UVTexture Editor if open (really really faster!)
+	//
+	$texWinName = `getPanel -sty polyTexturePlacementPanel`;
+	// disable it if it's in embedded in a layout (like perspView)
+	removeTextureWindow $texWinName[0];
+	
+	// close it if it's a separate window
+	if ( `window -exists polyTexturePlacementPanel1Window` ) {
+		deleteUI -window polyTexturePlacementPanel1Window;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Create a curve from contiguous edges of each selected edge
+	//
+	for ($curSel in $sel)
+	{
+		select -r $curSel;
+		polySelectConstraint -type 0x8000 -propagate 4 -m2a 30 -m3a 90;
+		
+		$tempSel = `polyToCurve -form 2 -degree 1`;
+		$curCurve = $tempSel[0];
+		parent $curCurve $curvesGrp;
+		
+		$result[size($result)] = $curCurve;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Return the created curves
+	//
+	select -r $curvesGrp;
+	return $result;
+}
+

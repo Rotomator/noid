@@ -1,0 +1,539 @@
+//=============================================================================
+//
+//	Import Settings From XML - Script that imports nCloth settings on selection from an XML
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.1
+//
+// Created  :    23/09/2010
+// Modified :    23/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AsettingsFromXml" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+//-------------------------------------------------------------------------
+//
+// Procedure that imports nCloth attributes from the XML to the selected object
+//		<< takes for arg the XML file's path
+//		<< takes for arg the nMesh on wich attributes will be set
+//		<< takes for arg a boolean to activate verbosity
+//
+//-------------------------------------------------------------------------
+
+global proc A_settingsFromXml(string $XMLFile, string $selObj, int $check)
+{
+	string $tempArray[];
+	string $nClothNode;
+	string $XMLArray[];
+	int    $fileID;
+	string $xmlNClothL[];
+	string $matchNCloth;
+	int    $lineNum = 0;
+	string $attrL[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Check whether XML file exists
+	//
+	$fileExist = `filetest -r $XMLFile`;
+	if (!$fileExist)
+	{
+		error "The specified XML file doesn't exist ! Please check it's path.";
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Check if mesh exists and is connected to nCloth
+	//
+	if ( $selObj == "" )
+	{
+		error ("No source mesh given !");
+	}
+	
+	$tempArray = `filterExpand -fullPath true -sm 12 $selObj`;
+	
+	if (!`size($tempArray)`) {
+		error ("Please give a POLYGONAL object ( nMesh ) as source !");
+	}
+	$selObj = $tempArray[0];
+	
+	
+	$tempArray = `ls -type nCloth (listHistory ("-breadthFirst", $selObj))`;
+	
+	if (!`size($tempArray)`) {
+		error ("The current object must be connected to an nCloth Node !");
+	}
+	$nClothNode = $tempArray[0];
+	
+	if ($check)
+	{
+		print ("\/\/ \n");
+		print ("\/\/ -----------------------------------------\n");
+		print ("\/\/ The nCloth node attached to selection : \n");
+		print ("\/\/ \n");
+		print ($nClothNode + " \n");
+		print ("\/\/ -----------------------------------------\n");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Open XML file and put it's content in an Array
+	//
+	$fileID = `fopen $XMLFile "r"`;
+
+	while ( !`feof $fileID` )
+	{
+		string $line = (strip (fgetline ($fileID)));
+
+		if ( size( $line ) > 0 ) {
+			$XMLArray[size($XMLArray)] =  $line;
+		}
+	}
+
+	fclose $fileID;
+	
+	
+	// ------------------------------------------------------------
+	// -- Find the matching nCloth channels in the XML
+	//
+	for ($i=0; $i<size($XMLArray); $i++)
+	{
+		if ( `gmatch $XMLArray[$i] ("*"+$nClothNode+"\"*")` )
+		{
+			$xmlNClothL[size($xmlNClothL)] = $XMLArray[$i];
+		}
+	}
+	if (size($xmlNClothL) == 0)
+	{
+		error ("No nCloth nodes matching \"" + $nClothNode +"\" were found in XML !");
+	}
+	
+	// Clean the returned lines by keeping only the nCloth nodes names
+	for ($i=0; $i<size($xmlNClothL); $i++)
+	{
+		$xmlNClothL[$i] = `match ("\"[^\"]*"+$nClothNode+"*") $xmlNClothL[$i]`;
+		$xmlNClothL[$i] = `substitute "\"*" $xmlNClothL[$i] ""`;
+	}
+	
+	if ($check)
+	{
+		print ("\/\/ \n");
+		print ("\/\/ -----------------------------------------\n");
+		print ("\/\/ The matching nCloth nodes found in the XML : \n");
+		print ("\/\/ \n");
+		print $xmlNClothL;
+		print ("\/\/ -----------------------------------------\n");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the nCloth from XML matching the one in the scene (with or without namespaces)
+	//
+	for ($i=0; $i<size($xmlNClothL); $i++)
+	{
+		if ( $xmlNClothL[$i] == $nClothNode )
+		{
+			$matchNCloth = $xmlNClothL[$i];
+			break;
+		}
+		else if (`substitute "^[^.]*:" $xmlNClothL[$i] ""` == `substitute "^[^.]*:" $nClothNode ""`)
+		{
+			$matchNCloth = $xmlNClothL[$i];
+			break;
+		}
+	}
+	
+	if ($matchNCloth == "")
+	{
+		warning ("No Cloth node in XML matches exactly \"" + $nClothNode +"\" ! Taking this one : \"" + $xmlNClothL[0] + "\".");
+		$matchNCloth = $xmlNClothL[0];
+	}
+	
+	if ($check)
+	{
+		print ("\/\/ \n");
+		print ("\/\/ -----------------------------------------\n");
+		print ("\/\/ The best matching nCloth node from XML : \n");
+		print ("\/\/ \n");
+		print ($matchNCloth + " \n");
+		print ("\/\/ -----------------------------------------\n");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Get all the nCloth attributes in the XML
+	//
+	for ($i=0; $i<size($XMLArray); $i++)
+	{
+		if ( `gmatch $XMLArray[$i] ("*"+$matchNCloth+".*")` )
+		{
+			$lineNum = $i;
+			break;
+		}
+	}
+	if ($lineNum == 0)
+	{
+		error ("No nCloth attributes found in XML for \"" + $matchNCloth +"\" !");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Save all the nCloth attributes
+	//
+	for ($i=$lineNum; $i<size($XMLArray); $i++)
+	{
+		if ( `gmatch $XMLArray[$i] ("*"+$matchNCloth+".*")` )
+		{
+			$curLine = `substitute "<extra>" $XMLArray[$i] ""`;
+			$curLine = `substitute "</extra>" $curLine ""`;
+			$curLine = `substitute "=" $curLine " "`;
+			$curLine = `substitute $matchNCloth $curLine $nClothNode`;
+			$attrL[size($attrL)] = ("setAttr " + $curLine + ";");
+		}
+		else
+		{
+			break;
+		}
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Set the attributes on the nCloth node
+	//
+	
+	if ($check)
+	{
+		print ("\/\/ \n");
+		print ("\/\/ -----------------------------------------\n");
+		print ("\/\/ The nCloth's attributes that will be set : \n");
+		print ("\/\/ \n");
+	}
+	
+	for ($i=0; $i<size($attrL); $i++)
+	{
+		if (`gmatch $attrL[$i] "*currentTime*"` || `gmatch $attrL[$i] "*playFromCache*"`)
+		{
+			continue;
+		}
+		
+		if ($check)
+		{
+			print ("\/\/ " + $attrL[$i] + " \n");
+		}
+		
+		catchQuiet( eval( $attrL[$i] ));
+	}
+}
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh
+//
+//-------------------------------------------------------------------------
+//
+global proc sFX_getRefMesh()
+{
+	string $window 		= "win_AsettingsFromXml";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $sel[];
+	
+	
+	$sel = `filterExpand -fullPath false -sm 12 (ls ("-sl"))`;
+	
+    if (!`size($sel)`)
+	{
+        error "Please select one POLYGONAL Object !";
+	}
+	
+	textFieldButtonGrp -e -tx $sel[0] $b_refMesh;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that GETS the files' path
+//
+//-------------------------------------------------------------------------
+//
+global proc sFX_getFilePath()
+{
+	string $window 			= "win_AsettingsFromXml";
+	string $b_filePath 	= ($window+"_filePath");
+	string $multipleFilters;
+	string $filename[];
+	
+	
+	$multipleFilters = "XML Files (*.xml);;All Files (*.*)";
+	$filename = `fileDialog2 -fileMode 1 -fileFilter $multipleFilters -selectFileFilter "XML Files" -dialogStyle 2`;
+	
+	textFieldButtonGrp -e -tx $filename $b_filePath;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that LAUNCHES the script when hitting "CREATE" button
+//
+//-------------------------------------------------------------------------
+//
+global proc sFX_apply()
+{
+	string $window		= "win_AsettingsFromXml";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $b_filePath = ($window+"_filePath");
+	string $c_verb		= ($window+"_verb");
+	
+	string $refMesh 	= `textFieldButtonGrp -q -tx $b_refMesh`;
+	string $filePath	= `textFieldButtonGrp -q -tx $b_filePath`;
+	int    $check		= `checkBoxGrp -q -v1 $c_verb`;
+	
+	
+	// -- Launch main proc
+	//
+	print ("\/\/ CMD : A_settingsFromXml (\"" + $filePath + "\", \"" + $refMesh + "\", " + $check + ") \n");
+	
+	A_settingsFromXml($filePath, $refMesh, $check);
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that calls the ABOUT window
+//
+//-------------------------------------------------------------------------
+//
+global proc AsettingsFromXmlAbout(string $version)
+{
+	string $winAbout = "win_AsettingsFromXml_about";
+
+	windowPref -enableAll false;
+
+	if (`window -exists $winAbout`)
+		deleteUI -window $winAbout;
+
+	$winAbout =`window -title "About..."
+		-iconName "About win_AsettingsFromXml"
+		-toolbox true
+		-sizeable false
+		-widthHeight 300 300
+		-topEdge 256
+		-leftEdge 512
+		$winAbout`;
+
+	columnLayout -adjustableColumn true;
+
+		text -label "";
+		text -label " Script    : AsettingsFromXml" -align "left";
+		text -label (" Version : "+ $version) -align "left";
+		text -label " Creator : Ali" -align "left";
+		text -label " Contact : chibi_ali@homtail.com" -align "left";
+		text -label "";
+		text -label "";
+		text -label " Features : " -align "left";
+		text -label "";
+		text -label " Imports nCloth settings on selected nMesh from an XML cache file" -align "left";
+		text -label "";
+		text -label " - Gets from selected Mesh the connected nCloth node" -align "left";
+		text -label " - Finds the best matching nCloth channel in the XML" -align "left";
+		text -label " - Imports the attributes from the XML to the nCloth node" -align "left";
+		text -label "";
+
+	windowPref -enableAll true;
+	showWindow $winAbout;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc AsettingsFromXml()
+{
+	string $version = "v1.1";
+	string $window = "win_AsettingsFromXml";
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		windowPref -remove $window;
+
+		$window = `window 	-title 		("Import Settings From XML " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"AsettingsFromXml"
+							-width 		430
+							-height 	180
+							-sizeable	true
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title 		("Import Settings From XML " + $version)
+							-iconName 	"AsettingsFromXml"
+							-width 		430
+							-height 	180
+							-sizeable	true
+							$window`;
+	}
+	
+	
+
+	// -- Create a Form Layout to contain window's body
+	//
+	string $parentFrmLyt = `formLayout -numberOfDivisions 100 myFrmLyt`;
+	
+		// Create a Column Layout to contain the menu
+		//
+		string $parentCoLyt = `columnLayout -adjustableColumn true myCoLyt`;
+
+			// Create a menu for the window
+			//
+			string $menuBarLayout = `menuBarLayout`;
+			setParent ..;
+
+			//separator -height 10 -style "none";
+		
+		setParent ..;
+		
+		
+		// Body layout
+		//
+		//string $bodyLyt = `columnLayout -adjustableColumn true exCoLyt01`;
+		string $bodyLyt = `scrollLayout -w 420 -h 170 bodyLyt01`;
+		
+			// Fields
+			separator -height 10 -style "none";
+			
+			string $b_refMesh = `textFieldButtonGrp
+								-l "Source nMesh"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "The source nMesh on wich attributes will be imported"
+								-bc "sFX_getRefMesh"
+								($window+"_refMesh")`;
+
+			separator -height 10 -style "none";
+			
+			string $b_filePath = `textFieldButtonGrp
+								-l "XML Path"
+								-ed 1
+								-bl " Browse "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-bc "sFX_getFilePath"
+								-ann "The path of XML cache file"
+								($window+"_filePath")`;
+
+			separator -height 10 -style "none";
+			separator -height 10 -style "none";
+			
+			string $c_verb    = `checkBoxGrp
+								-l1 "Verbose Mode"
+								-v1 false
+								-columnAttach 1 "left" 87
+								-ann "Activate verbosity / messages for checking"
+								($window+"_verb")`;
+		setParent ..;
+		
+		
+		// Buttons
+		//
+		string $b_create = `button -label "Create" -w 150 -command "sFX_apply" ($window+"_create")`;
+		
+		string $b_close = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close")`;
+
+	setParent ..;
+	
+	
+	
+	// -- Edits the MAIN FORM layout
+	//
+	formLayout -edit
+		-attachForm     $parentCoLyt	"top"     0
+		-attachForm     $parentCoLyt	"left"    0
+		-attachForm     $parentCoLyt	"right"   0
+		
+		-attachControl  $bodyLyt		"top" 	  0 $parentCoLyt
+		-attachForm     $bodyLyt		"left"    5
+		-attachForm     $bodyLyt		"right"   5
+		-attachControl	 $bodyLyt		"bottom"  5 $b_create
+		
+		-attachNone		 $b_create    	"top" 	  
+		-attachForm     $b_create	    "left"    5
+		-attachPosition $b_create	    "right"   5 50
+		-attachForm     $b_create	    "bottom"  5
+		
+		-attachNone		 $b_close    	"top" 	  
+		-attachPosition $b_close	    "left"    5 50
+		-attachForm     $b_close	    "right"   5
+		-attachForm     $b_close	    "bottom"  5
+		
+	$parentFrmLyt;
+	
+	
+	// -- Edits the window's menu
+	//
+	setParent $menuBarLayout;
+		menu -label "Help" -helpMenu true;
+			menuItem -label "About..." -c ("AsettingsFromXmlAbout \"" + $version + "\"") helpMit;
+	
+	
+	// -- Launch the window
+	//
+	showWindow $window;
+}
+

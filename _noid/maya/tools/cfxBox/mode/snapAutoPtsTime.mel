@@ -1,0 +1,48 @@
+global proc snapAutoPts( )
+{
+	string $sel[] = `ls -sl -fl`;
+	
+	if( size($sel)<2 )
+		print( "Selectionner d'abord les points a snapper, puis la shape destination." );
+	else
+	{	
+		string $stTokens[];
+		
+		tokenize $sel[0] "." $stTokens;
+		string $source = $stTokens[0];
+		
+		tokenize $sel[size($sel)-1] "." $stTokens;
+		string $dest = $stTokens[0];
+		
+		int $tabNumV[] = `polyEvaluate -vertex $dest`;
+		float $tabDest[] = `xform -q -t -os ($dest+".vtx[0:"+$tabNumV[0]+"]")`;
+		int $i = size( $sel ) - 1;
+		int $nums;
+		for( ; $i--; )
+		{
+			tokenize $sel[$i] "." $stTokens;
+			$nums = match( "[0-9]+", $stTokens[1] );
+			move -a -ls $tabDest[3*$nums] $tabDest[3*$nums+1] $tabDest[3*$nums+2] ($source+".vtx["+$nums+"]");
+		}
+	}
+}
+
+global proc snapAutoPtsTime( float $start, float $end, float $step )
+{
+	string $sel[] = `ls -sl -fl`;
+	int $i;
+	
+	for( ; $start <= $end; $start+=$step )
+	{
+		currentTime $start;
+		snapAutoPts;
+		$i = size( $sel ) - 1;
+		for( ; $i--; )
+		{
+			setKeyframe ($sel[$i]+".px");
+			setKeyframe ($sel[$i]+".py");
+			setKeyframe ($sel[$i]+".pz");
+		}
+	}
+}
+

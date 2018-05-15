@@ -1,0 +1,648 @@
+//=============================================================================
+//
+//	Attach Curves to Emitter	- Script that attaches selected Nurbs CURVES to a Poly EMITTER
+//								- Filters only the curves that are on the "inside" part of the poly mesh
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.1
+//
+// Created  :    03/09/2010
+// Modified :    06/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AattachCurves2Emitter" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that returns curves that are on the "inside" part of a mesh
+//		<< takes for arg the reference mesh
+//		<< takes for arg the list of the curves to be tested
+//		<< takes for arg the distance (with nearest Vtx) beyond which the curve is ignored
+//
+//		>> returns the curves on the inside part
+//
+//-------------------------------------------------------------------------
+
+global proc string[] aC2E_keepIfCurveOnMesh(string $refObj, string $curvSel[], float $maxDist)
+{
+	string $tempArray[];
+	string $curvList[];
+	string $vtxBorder[];
+	string $closestPOM;
+	float  $epPos[];
+	int    $closestVtxOnRef;
+	float  $closVtxPos[];
+	float  $deltaPos[];
+	float  $epVtxDist;
+	string $isVtxSelected[];
+	string $curvIsOnMesh[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Check arguments
+	//
+	if ( $refObj == "" )
+	{
+		error ("No Reference mesh given !");
+	}
+	else
+	{
+		$tempArray = `filterExpand -fullPath false -sm 12 $refObj`;
+		
+		if (!size($tempArray)) {
+			error ("Please give a POLYGONAL object as Reference !");
+		}
+	}
+	
+	
+	if ( !size($curvSel) )
+	{
+		error "Please select at least one NURBS Curve to convert !";
+	}
+	else
+	{
+		$curvList = `filterExpand -fullPath false -sm 09 $curvSel`;
+		$curvList = `ls -visible $curvList`;
+		
+		if (!`size($curvList)`)
+		{
+			error "Please select at least one visible NURBS Curve to convert !";
+		}
+	}
+	
+	
+	if ( !$maxDist )
+	{
+		$maxDist = 0.01;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Get all the vtx at the border
+	//
+	select -r ($refObj + ".vtx[*]");
+	polySelectBorderShell 1;
+	$vtxBorder = `ls -flatten -sl`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Create closestPointOnMesh and connect $refObj as reference object
+	//
+	$closestPOM = createNode("closestPointOnMesh");
+	connectAttr -f ($refObj + ".outMesh") ($closestPOM + ".inMesh");
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the curves that are on the "inside" part of the mesh (ignoring the borders)
+	//
+	for ($curCurv in $curvList)
+	{
+		// Get the closest vtx to each curve's base (curve.ep[0])
+		$epPos = `pointPosition -w ($curCurv + ".ep[0]")`;
+		setAttr ($closestPOM + ".inPosition") $epPos[0] $epPos[1] $epPos[2];
+		$closestVtxOnRef = `getAttr ($closestPOM + ".closestVertexIndex")`;
+		
+		// Check the distance between curve's base and the closest mesh vtx
+		$closVtxPos = `pointPosition -w ($refObj + ".vtx["+$closestVtxOnRef+"]")`;
+		$deltaPos = {($closVtxPos[0]-$epPos[0]), ($closVtxPos[1]-$epPos[1]), ($closVtxPos[2]-$epPos[2])};
+		$epVtxDist = `mag <<$deltaPos[0], $deltaPos[1], $deltaPos[2]>>`;
+		
+		if ($epVtxDist > $maxDist) {
+			continue;
+		}
+		
+		// Keep curve only if vertex is not at border
+		select -r $vtxBorder;
+		clear $isVtxSelected;
+		$isVtxSelected = `ls -sl ($refObj + ".vtx["+$closestVtxOnRef+"]")`;
+		
+		if (!`size($isVtxSelected)`)
+		{
+			// Add Extra Attribute
+			if (!`attributeExists "closestVtx" $curCurv`) {
+				addAttr -ln "closestVtx" -dt "string" $curCurv;
+			}
+			if (`getAttr -l ($curCurv + ".closestVtx")`) {
+				setAttr -l off ($curCurv + ".closestVtx");
+			}
+			setAttr -type "string" ($curCurv + ".closestVtx") ($refObj + ".vtx["+$closestVtxOnRef+"]");
+			
+			// Keep curve
+			$curvIsOnMesh[size($curvIsOnMesh)] = $curCurv;
+		}
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all the curves that are "inside" the refObj
+	//
+	delete $closestPOM;
+	select -r $curvIsOnMesh;
+	return $curvIsOnMesh;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that converts nurbs Curves to poly bands
+//		<< takes for arg the list of the curves to be attached
+//		<< takes for arg the object that the curves will be attached to
+//
+//		>> returns the attached curves
+//
+//-------------------------------------------------------------------------
+
+global proc string[] aC2E_attachCurves(string $curvSel[], string $refObj)
+{
+	string $sel[];
+	string $test1[];
+	string $tempArray[];
+	string $refObjCleanName;
+	string $rootGrp;
+	string $folcGrp;
+	string $tmpRefUVBand;
+	string $isoCurvRef1;
+	string $isoCurvRef2;
+	string $fixCurv;
+	float  $epPos[];
+	float  $curvArcLen;
+	string $matchVtx;
+	string $matchVtxID;
+	float  $matchVtxUVs[2];
+	string $locat01;
+	string $locat02;
+	string $offsetCurv;
+	string $loftNurbs;
+	string $isoOffCurv1;
+	string $isoOffCurv2;
+	string $loftPoly;
+	string $loftPolyList[];
+	float  $normalsDir;
+	string $combOrder;
+	string $initCurves[];
+	string $result[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Get all nurbs Curves from selection or hierachy
+	//
+	if ( !size($curvSel) )
+	{
+		error "Please select at least one NURBS Curve to convert !";
+	}
+	else
+	{
+		$sel = `filterExpand -fullPath false -sm 09 $curvSel`;
+		$sel = `ls -visible $sel`;
+		
+		if (!`size($sel)`)
+		{
+			error "Please select at least one visible NURBS Curve to convert !";
+		}
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Check Emitter mesh
+	//
+	if ( $refObj == "" )
+	{
+		error ("No Reference mesh given !");
+	}
+	else
+	{
+		$test1 = `filterExpand -sm 12 $refObj`;
+		
+		if (!size($test1)) {
+			error ("The Reference mesh must be a POLYGONAL object !");
+		}
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Remove any existing nameSpace
+	//
+	if (`gmatch $refObj "*:*"`) {
+		$refObjCleanName = `substitute "^[^.]*:" $refObj ""`;
+	}
+	else {
+		$refObjCleanName = $refObj;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Attach each CURVE to the Emitter mesh
+	//
+	$folcGrp = `createNode transform -n ($refObjCleanName + "_FOLIC#")`;
+	
+	for ($curSel in $sel)
+	{
+		// ------------------------------------------------------------
+		// -- Check that the given curve has the extraAttr containing the closest Vtx on Ref surface
+		//
+		if (!`attributeExists "closestVtx" $curSel`) {
+			error ("The Curve \""+$curSel+"\" must have a \"closestVtx\" extra attribute !");
+		}
+		
+		
+		// ------------------------------------------------------------
+		// -- Create a follicule on the vtx corresponding to the curve's base
+		//
+		$matchVtx    = `getAttr ($curSel + ".closestVtx")`;
+		// Get only the vertex ID (ie. "1383" from "emitterFront_wrap.vtx[1383]") 
+		$matchVtxID  = `substitute "^[^[]*\\[" $matchVtx ""`;
+		$matchVtxID  = `substitute "\\].*" $matchVtxID ""`;
+		$tempArray   = `polyListComponentConversion -fv -tuv $matchVtx`;
+		$matchVtxUVs = `polyEditUV -q $tempArray[0]`;
+		
+		string $fol  = `createNode transform -p $folcGrp -n ("fol_"+ $refObjCleanName +"_v"+ $matchVtxID)`;
+		string $folS = `createNode follicle -p $fol -n ($fol + "Shape")`;
+		
+		connectAttr -f ($refObj + ".worldMatrix[0]") ($folS + ".inputWorldMatrix");
+		connectAttr -f ($refObj + ".worldMesh[0]") ($folS + ".inputMesh");
+		connectAttr -f ($folS + ".outRotate") ($fol + ".rotate");
+		connectAttr -f ($folS + ".outTranslate") ($fol + ".translate");
+		
+		setAttr ($folS + ".parameterU") $matchVtxUVs[0];
+		setAttr ($folS + ".parameterV") $matchVtxUVs[1];
+		
+		
+		// ------------------------------------------------------------
+		// -- Offset slightly the follicle to avoid animation "plops" and attach the CURVE to it
+		//
+		setAttr ($folS + ".parameterU") ($matchVtxUVs[0] -0.0002);
+		setAttr ($folS + ".parameterV") ($matchVtxUVs[1] -0.0002);
+		parentConstraint -mo $fol $curSel;
+		
+		
+		// ------------------------------------------------------------
+		// -- Stock the current curve
+		//
+		$result[size($result)] = $curSel;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Create a Set containing the list of nurbs Curves
+	//
+	sets -n ("CURV_"+ $refObjCleanName +"_Set#") $result;
+	
+	
+	// ------------------------------------------------------------
+	// -- Return the attached curbes
+	//
+	select -r $result;
+	return $result;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that attaches CURVES (those "inside"/"on" the mesh) to the poly mesh (EMITTER)
+//		<< takes for arg the list of the curves to be converted
+//		<< takes for arg the mesh that the curves will be attached to
+//		<< takes for arg the distance (with reference mesh) beyond which the curve is considered too far and ignored
+//
+//		>> returns the list of attached curves
+//
+//-------------------------------------------------------------------------
+
+global proc string[] A_attachCurves2Emitter(string $curvSel[], string $refObj, float $maxDist)
+{
+	string $filtrCurv[];
+	string $texWinName[];
+	string $result[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Set Timer start
+	//
+	$startTime = `timerX`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Close UVTexture Editor if open (really really faster!)
+	//
+	$texWinName = `getPanel -sty polyTexturePlacementPanel`;
+	// disable it if it's in embedded in a layout (like perspView)
+	removeTextureWindow $texWinName[0];
+	
+	// close it if it's a separate window
+	if ( `window -exists polyTexturePlacementPanel1Window` ) {
+		deleteUI -window polyTexturePlacementPanel1Window;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Keep only curves that are on the "inside" part of $refObj
+	//
+	$filtrCurv = aC2E_keepIfCurveOnMesh( $refObj, $curvSel, $maxDist );
+	
+	if (!`size($filtrCurv)`)
+	{
+		error ("The selected curves are too far from Reference Mesh ! Please select closer curves or change \"Max Dist\" !");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Attach the filtered nurbs Curves to $refObj
+	//
+	$result = aC2E_attachCurves( $filtrCurv, $refObj );
+	
+	
+	// ------------------------------------------------------------
+	// -- Stop Timer
+	//
+	$totalTime = `timerX -startTime $startTime`;
+	print ("\/\/ Total Time : "+$totalTime+"\n");
+	
+	
+	// ------------------------------------------------------------
+	// -- Return the attached curves
+	//
+	select -r $result;
+	return $result;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh
+//
+//-------------------------------------------------------------------------
+//
+global proc aC2E_getRefMesh()
+{
+	string $window 		= "win_AattachCurves2Emitter";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $sel[];
+	
+	
+	$sel = `filterExpand -fullPath false -sm 12 (ls ("-sl"))`;
+	
+    if (!`size($sel)`)
+	{
+        error "Please select one POLYGONAL Object !";
+	}
+	
+	textFieldButtonGrp -e -tx $sel[0] $b_refMesh;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that LAUNCHES the script when hitting "CREATE" button
+//
+//-------------------------------------------------------------------------
+//
+global proc aC2E_apply()
+{
+	string $window		= "win_AattachCurves2Emitter";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $b_maxDist	= ($window+"_maxDist");
+	
+	string $refMesh 	= `textFieldButtonGrp -q -tx $b_refMesh`;
+	float  $maxDist	 	= `floatFieldGrp -q -v1 $b_maxDist`;
+	string $curvSel[];
+	
+	
+	$curvSel = `ls -sl`;
+	
+	// -- Launch main proc
+	//	
+	print ("\/\/ CMD : A_attachCurves2Emitter ({\"FirstSelection\", \"SecondSelection\", ...}, \"" + $refMesh + "\", " + $maxDist + ") \n");
+	A_attachCurves2Emitter($curvSel, $refMesh, $maxDist);
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that calls the ABOUT window
+//
+//-------------------------------------------------------------------------
+//
+global proc AattachCurves2EmitterAbout(string $version)
+{
+	string $winAbout = "win_AattachCurves2Emitter_about";
+
+	windowPref -enableAll false;
+
+	if (`window -exists $winAbout`)
+		deleteUI -window $winAbout;
+
+	$winAbout =`window -title "About..."
+		-iconName "About win_AattachCurves2Emitter"
+		-toolbox true
+		-sizeable false
+		-widthHeight 300 300
+		-topEdge 256
+		-leftEdge 512
+		$winAbout`;
+
+	columnLayout -adjustableColumn true;
+
+		text -label "";
+		text -label " Script    : AattachCurves2Emitter" -align "left";
+		text -label (" Version : "+ $version) -align "left";
+		text -label " Creator : Ali" -align "left";
+		text -label " Contact : chibi_ali@homtail.com" -align "left";
+		text -label "";
+		text -label "";
+		text -label " Features : " -align "left";
+		text -label "";
+		text -label " Attaches selected Nurbs CURVES to a Poly EMITTER" -align "left";
+		text -label "";
+		text -label " - Filters only the curves that are on the \"inside\" part of the Reference mesh" -align "left";
+		text -label " - Change distance (with reference mesh) beyond which the curve is considered too far and ignored" -align "left";
+		text -label "";
+
+	windowPref -enableAll true;
+	showWindow $winAbout;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc AattachCurves2Emitter()
+{
+	string $version = "v1.1";
+	string $window = "win_AattachCurves2Emitter";
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		windowPref -remove $window;
+
+		$window = `window 	-title 		("Attach Curves 2 Emitter " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"AattachCurves2Emitter"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title 		("Attach Curves 2 Emitter " + $version)
+							-iconName 	"AattachCurves2Emitter"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	
+	
+
+	// -- Create a Form Layout to contain window's body
+	//
+	string $parentFrmLyt = `formLayout -numberOfDivisions 100 myFrmLyt`;
+	
+		// Create a Column Layout to contain the menu
+		//
+		string $parentCoLyt = `columnLayout -adjustableColumn true myCoLyt`;
+
+			// Create a menu for the window
+			//
+			string $menuBarLayout = `menuBarLayout`;
+			setParent ..;
+
+			//separator -height 10 -style "none";
+		
+		setParent ..;
+		
+		
+		// Body layout
+		//
+		//string $bodyLyt = `columnLayout -adjustableColumn true exCoLyt01`;
+		string $bodyLyt = `scrollLayout -w 420 -h 200 bodyLyt01`;
+		
+			// Fields
+			separator -height 10 -style "none";
+			
+			string $b_refMesh = `textFieldButtonGrp
+								-l "Reference Mesh"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "The reference mesh to which curves will be attached"
+								-bc "aC2E_getRefMesh"
+								($window+"_refMesh")`;
+
+			separator -height 10 -style "none";
+			
+			string $b_maxDist  = `floatFieldGrp
+								-l "Curve Max Dist"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-precision 3
+								-v1 0.003
+								-ann "The distance (with reference mesh) beyond which the curve is considered too far and ignored"
+								($window+"_maxDist")`;
+			
+		setParent ..;
+		
+		
+		// Buttons
+		//
+		string $b_create = `button -label "Create" -w 150 -command "aC2E_apply" ($window+"_create")`;
+		
+		string $b_close = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close")`;
+
+	setParent ..;
+	
+	
+	
+	// -- Edits the MAIN FORM layout
+	//
+	formLayout -edit
+		-attachForm     $parentCoLyt	"top"     0
+		-attachForm     $parentCoLyt	"left"    0
+		-attachForm     $parentCoLyt	"right"   0
+		
+		-attachControl  $bodyLyt		"top" 	  0 $parentCoLyt
+		-attachForm     $bodyLyt		"left"    5
+		-attachForm     $bodyLyt		"right"   5
+		-attachControl	 $bodyLyt		"bottom"  5 $b_create
+		
+		-attachNone		 $b_create    	"top" 	  
+		-attachForm     $b_create	    "left"    5
+		-attachPosition $b_create	    "right"   5 50
+		-attachForm     $b_create	    "bottom"  5
+		
+		-attachNone		 $b_close    	"top" 	  
+		-attachPosition $b_close	    "left"    5 50
+		-attachForm     $b_close	    "right"   5
+		-attachForm     $b_close	    "bottom"  5
+		
+	$parentFrmLyt;
+	
+	
+	// -- Edits the window's menu
+	//
+	setParent $menuBarLayout;
+		menu -label "Help" -helpMenu true;
+			menuItem -label "About..." -c ("AattachCurves2EmitterAbout \"" + $version + "\"") helpMit;
+	
+	
+	// -- Launch the window
+	//
+	showWindow $window;
+}
+

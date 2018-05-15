@@ -1,0 +1,9 @@
+global proc create_nGroup()
+{
+group -empty -name loToHi;
+group -empty -name initMesh_all;
+group -empty -name collid_all;
+group -empty -name bands_all;
+group -empty -name cloth_all;
+group  -n dynRigAll collid_all bands_all cloth_all initMesh_all loToHi;
+}

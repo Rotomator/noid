@@ -1,0 +1,206 @@
+
+//-----------------------------------------------------------------------------------
+//find last cache in folder
+//-----------------------------------------------------------------------------------
+
+
+
+global proc findLastCache(string $list)
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	 string $fileName; 
+    string $DName;
+    string $DNamereduce;
+    string $component; 
+    int $sz; 
+	string $cacheDirectory;
+	string $cacheName;
+	string $foldername;
+	string $foldercache;
+	string $shapes[];
+	string $Nucfolder[];
+	string $shortCacheName;
+	string $cachePath;
+	string $checkNumber[]; 
+	string $cleanL="";
+	string $listCacheOK[];
+	string $lastCache="";
+	int $numberCache;
+	int $numTmp=0;
+	string $clothName;
+	string $removeSuff; 
+	string $uiParent;
+	string $num;
+	/*
+	process
+	-----------------------------------------------------*/	
+	
+	$fileName = `file -q -sceneName`;
+	$DName=`match "[^/\\]*$" $fileName`;
+	$DNamereduce=`match "^[^\.]*" $DName`;
+	$component =match( "^.*/", $fileName );
+	$sz = size( $component );
+
+  // Strip off trailing '/'
+  //
+      if ( ( $sz > 1 ) && ( substring( $component, $sz, $sz ) == "/" ) ) 
+	  {
+		  $component = substring( $component, 1, ($sz - 1) );
+	  }
+
+	  $cacheDirectory= $component + "_SyCache/" + $DNamereduce + "_SyCache/";
+	  $cacheName=$list;	  
+	  $foldername = `substitute ":[^:]*$" $cacheName ""`;
+	  $foldercache = $cacheDirectory + $foldername ; 			
+	  $shapes = `listRelatives -s -path $list`;
+	  $Nucfolder=`listConnections -d off -s on -t nucleus $shapes[0]`;
+	  $shortCacheName = `match "[^:]*$"  $Nucfolder[0]`;
+	  $cachePath = $foldercache + "/" + $shortCacheName; 	  	  
+	  $clothName=`substitute "^[^.]*\\:" $list ""`;
+	  $removeLast = `substitute "_[^_*]*$" $clothName ""`;	 
+	  $removeSuff=`substitute "_nCloth" $removeLast ""`;	  
+	 $num = `match "[0-9]+$" $clothName`;
+	 
+	 if($num)
+	 {
+		 	  $checkNumber = `getFileList -fs ($cachePath +"/" +"*"+ $removeSuff+"*"+$num+"*"+ ".xml")`;
+			  print ("file type _nCloth[0-9] \n");
+
+	 }
+	 
+	 else
+		 {		 
+		 	  $checkNumber = `getFileList -fs ($cachePath +"/" +"*"+ $removeSuff+"*"+ ".xml")`;
+			  print ("file type _nCloth \n");
+		 }
+	 
+  
+	  if ((size($checkNumber)) &&(`filetest -d $cachePath`>0))
+	  {
+	  	
+
+			for($files in $checkNumber )
+			{
+		   
+				string $CacheName=`substitute ".xml" $files ""`;
+				string $CacheNamelow=`substitute $num $CacheName ""`;
+				string $nomMin = `tolower $CacheNamelow`;
+			
+					if(`gmatch $nomMin "*ok"`)
+					{
+						$lastCache =$files;			
+						break;
+					}
+					
+					else 
+					{							
+						int $numb=`match "[0-9]+$" $CacheName`;
+						
+							if($numb>=$numTmp)
+							{
+								$lastCache= $files;
+								$numTmp=$numb;
+							}					
+					}
+			}
+		
+			print "//-----------------------------------------------------------------------------------\n";
+			print ("//---- last cache Used is " +$lastCache +"\n");
+			print "//-----------------------------------------------------------------------------------\n";
+			
+			
+							string $cachelight=`match "^[^\.]*" $lastCache`;
+							string $channels[] = `cacheFile -fileName ($cachePath+"/"+$lastCache) -q -channelName`;	
+							
+							if (`size($channels)`>1)
+							{
+								warning ("more than one channel present in the cache file try to attach with assign cache");
+							}
+														
+							string $inputPointsAttr=$shapes[0]+".positions";
+							string $attachCmd = ( "cacheFile -attachFile -fileName \"" + $cachePath+"/"+$lastCache + "\"" );
+							$attachCmd += (" -ia "+$inputPointsAttr);
+							$attachCmd += (" -channelName "+$channels[0]);
+							string $cacheFile = `eval $attachCmd`;
+							connectAttr ($cacheFile+".inRange") ($shapes[0]+".playFromCache");		
+														
+	  }
+	  
+	  else 
+		  {
+			  print "//-----------------------------------------------------------------------------------\n";
+			  print ("//---- no Cache found for" +$list+" skip to next \n");
+			  print "//-----------------------------------------------------------------------------------\n";
+
+		  }
+		  
+	/*
+	retours
+	-----------------------------------------------------*/
+	
+	if ($mgDebug)
+	{
+		print ("\n######\nScript : \n\n");
+		
+		print ("\n######\n");
+	}	
+	
+	/*
+	*/	
+}
+
+
+
+//-----------------------------------------------------------------------------------
+//attach last cache
+//-----------------------------------------------------------------------------------
+
+
+global proc ClearAllCache(string $selnCache)
+{
+		/*
+	variables
+	-----------------------------------------------------*/
+	
+	string $selrelatvie[];
+    string $ncacheBlend[];
+    string $shorterBlend[];
+	string $ncache[] ;
+	string $shorterCache[];
+	
+		/*
+	process
+	-----------------------------------------------------*/
+
+	$selrelatvie=`listRelatives -s -path $selnCache`;   
+	$ncacheBlend = `listConnections -t cacheBlend $selrelatvie[0]`;
+	$shorterBlend= stringArrayRemoveDuplicates($ncacheBlend);
+	
+		if(size($shorterBlend)>0)
+		{  
+			select -r $shorterBlend;
+			delete;
+		}
+		
+	$ncache = `listConnections -t cacheFile $selrelatvie[0]`;
+	$shorterCache= stringArrayRemoveDuplicates($ncache);
+
+	    if(`objExists $shorterCache[0]`== 1)
+		{
+			select $selnCache;
+	    
+			deleteCacheFile 3 { "keep", "", "nCloth" };
+
+		}
+		
+			/*
+	retours
+	-----------------------------------------------------*/
+	
+	}
+
+

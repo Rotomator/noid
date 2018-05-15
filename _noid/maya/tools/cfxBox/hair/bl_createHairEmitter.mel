@@ -1,0 +1,311 @@
+//=============================================================================
+//
+//	Create Hair Emitter	- Script that extracts guides and emitters from selected Nurbs TUBES
+//							- Use a reference curve to ensure emitters's normals are well directed
+//							- Keeps the initial Nurbs TUBES selection order in an ExtraAttribute
+//							- Creates a Hair System from the generated emitter and guides
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.61
+//
+// Created  :    04/08/2010
+// Modified :    21/09/2010
+//
+// Creator 	:    Benj Lester + Ali
+// Contact 	:    
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "bl_createHairEmitter" to launch the script.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Local Procs    -------------------------------
+//===================================================================================
+//***********************************************************************************
+
+//-------------------------------------------------------------------------
+//
+// Procedure that compares 2 normals directions
+//		<< takes for arg a poly vertex [A] to check its normals
+//		<< takes for arg a nurbs curve [B] which direction serves as reference
+//
+//		>> returns a float value (dotProduct of both surface normals)
+//		   POSITIVE = normals in SAME direction
+//		   NEGATIVE = normals in OPPOSITE direction
+//
+//-------------------------------------------------------------------------
+
+proc float cHE_compareNormals(string $polyVtx, string $curveRef)
+{
+	string $test1[];
+	string $test2[];
+	float  $cvCrv1[3];
+	float  $cvCrv2[3];
+	float  $deltaPos[];
+	float  $normVtx[];
+	float  $normVtxNz[3];
+	
+	
+	// ------------------------------------------------------------
+	// -- Check arguments
+	//
+	$test1 = `filterExpand -sm 31 $polyVtx`;
+	$test2 = `filterExpand -sm 09 $curveRef`;
+	
+	if ( !size($test1) )
+	{
+		error ("Please give a POLYGON VERTEX to check its normals !");
+	}
+	if ( !size($test2) )
+	{
+		error ("Please give a NURBS CURVE which direction will serve as reference !");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the direction of the curve
+	//
+	$cvCrv1 = `pointPosition -w ($curveRef + ".cv[0]")`;
+	$cvCrv2 = `pointPosition -w ($curveRef + ".cv[1]")`;
+	$deltaPos = {($cvCrv2[0]-$cvCrv1[0]), ($cvCrv2[1]-$cvCrv1[1]), ($cvCrv2[2]-$cvCrv1[2])};
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the normal of the vertex
+	//
+	$normVtx = `polyNormalPerVertex -q -normalXYZ $polyVtx`;
+	
+	$normVtxNz[0] = $normVtx[0];
+	$normVtxNz[1] = $normVtx[1];
+	$normVtxNz[2] = $normVtx[2];
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the dot product of the 2 vtx's normals
+	//    >> positive value = same direction
+	//
+	$dotProd = `dotProduct $normVtxNz $deltaPos 0`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Return the dot product
+	//
+	return $dotProd;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+//-------------------------------------------------------------------------
+//
+// Procedure that extracts guides and emitters from selected Nurbs TUBES + creates hair system
+//
+//		>> returns the created emitter
+//
+//-------------------------------------------------------------------------
+
+global proc string bl_createHairEmitter()
+{
+	string $surfaces[];
+	string $texWinName[];
+	string $rootGrp;
+	string $curvesGrp;
+	string $crvSubGrp;
+	string $emitterGrp;
+	string $hairSysGrp;
+	string $surface;
+	string $curveList[];
+	string $curves[];
+	string $cmd;
+	float  $cv0pos[];
+	string $emitter[];
+	string $combOrder;
+	string $tempArray[];
+	string $emitterList[];
+	string $combEmitter;
+	float  $normalsDir;
+	string $hairSystm;
+	string $hairSysPar;
+	
+	
+	// ------------------------------------------------------------
+	// -- Get all nurbsSurfaces from selection or hierachy
+	//
+	$surfaces = `filterExpand -fullPath false -sm 10 (ls ("-sl") )`;
+	$surfaces = `ls -visible $surfaces`;
+	
+    if (!`size($surfaces)`)
+	{
+        error "Please select at least one visible NURBS surface !";
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Close UVTexture Editor if open (really really faster!)
+	//
+	$texWinName = `getPanel -sty polyTexturePlacementPanel`;
+	// disable it if it's in embedded in a layout (like perspView)
+	removeTextureWindow $texWinName[0];
+	
+	// close it if it's a separate window
+	if ( `window -exists polyTexturePlacementPanel1Window` ) {
+		deleteUI -window polyTexturePlacementPanel1Window;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Create a root group that will contain curves + emitter
+	//
+	$rootGrp    = "hairsAll";
+	$curvesGrp  = "hairsCurves";
+	$emitterGrp = "hairsEmitters";
+	$hairSysGrp = "hairs";
+	$crvSubGrp  = "leavesCurves#";
+	
+	if (!`objExists $rootGrp`) {
+		$rootGrp = `createNode transform -n $rootGrp`;
+	}
+	if (!`objExists $curvesGrp`) {
+		$curvesGrp = `createNode transform -n $curvesGrp`;
+		parent $curvesGrp $rootGrp;
+	}
+	if (!`objExists $emitterGrp`) {
+		$emitterGrp = `createNode transform -n $emitterGrp`;
+		parent $emitterGrp $rootGrp;
+	}
+	if (!`objExists $hairSysGrp`) {
+		$hairSysGrp = `createNode transform -n $hairSysGrp`;
+		parent $hairSysGrp $rootGrp;
+	}
+	
+	$crvSubGrp = `createNode transform -n $crvSubGrp`;
+	parent $crvSubGrp $curvesGrp;
+	
+	
+	// ------------------------------------------------------------
+	// -- Create 1 curve + 1 emitter per Nurbs TUBE
+	//
+	for ($surface in $surfaces)
+	{
+		// ------------------------------------------------------------
+		// -- Create the curves from the Nurbs surface's V isoparms
+		//
+		clear $curveList;
+		clear $curves;
+		
+		selectVisibleIsoparms({$surface}, $curveList, 0, 1, 1);
+		
+		for ($i=0;$i<size($curveList);$i++)
+		{
+			$tempArray = `duplicateCurve -ch 1 -rn 0 -local 0 $curveList[$i]`;
+			$curves[size($curves)] = $tempArray[0];
+		}
+		
+		parent $curves $crvSubGrp;
+		
+		
+		// ------------------------------------------------------------
+		// -- Create the poly emitter
+		//
+		$cmd = "polyCreateFacet -ch off -tx 1 -s 1";
+		
+		for ($i=0;$i<size($curves);$i++)
+		{
+			$cv0pos = `pointPosition -w ($curves[$i]+ ".cv[0]")`;
+			$cmd += (" -p " + $cv0pos[0] + " " + $cv0pos[1]+ " " + $cv0pos[2]);
+		}
+		
+		$emitter = `eval $cmd`;
+		polyTriangulate $emitter[0];
+		delete -ch $emitter[0];
+		
+		
+		// Get the list of all nurbs tubes and their selection order
+		$emitterList[size($emitterList)] = $emitter[0];
+		$combOrder += ($surface + " ");
+		
+		// Reverse object normals if they aren't in the same direction as REFERENCE object
+		$normalsDir = `cHE_compareNormals ($emitter[0] + ".vtx[0]") $curves[0]`;
+		
+		if ($normalsDir < 0) {
+			polyNormal -nm 4 -ch 0 $emitter[0];
+		}
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Combine all the emitters into one mesh (in case of multi selection)
+	//
+	if (`size($surfaces)` != 1)
+	{
+		$tempArray = `polyUnite -n "leavesEmitter#" -ch 0 $emitterList`;
+		$combEmitter = $tempArray[0];
+		setAttr ($combEmitter + ".doubleSided") 0;
+	}
+	else
+	{
+		$combEmitter = $emitterList[0];
+		$combEmitter = `rename $combEmitter "leavesEmitter#"`;
+	}
+	
+	parent $combEmitter $emitterGrp;
+	polyAutoProjection -ch 0 -lm 0 -pb 0 -ibd 1 -cm 0 -l 2 -sc 1 -o 1 -p 6 -ps 0.2 -ws 0 $combEmitter;
+	
+	
+	// ------------------------------------------------------------
+	// -- Add an extra Attribute to the resulting mesh 
+	//   it will contain the ordered list of nurbs tubes that generated the poly emitters
+	//
+	addAttr -ln "combineOrder" -dt "string" $combEmitter;
+	setAttr -type "string" ($combEmitter + ".combineOrder") $combOrder;
+	setAttr -lock on ($combEmitter + ".combineOrder");
+	
+	
+	// ------------------------------------------------------------
+	// -- Create the Hair System from the generated emitter and guides
+	//
+	select -r $crvSubGrp $combEmitter;
+	
+	$hairSystm = mgHairCreate( "" );
+	
+	$tempArray  = `listRelatives -p $hairSystm`;
+	$hairSysPar = $tempArray[0];
+	$hairSysPar = `rename $hairSysPar "leavesHair#"`;
+	
+	$tempArray = `ls $hairSystm`;
+	$hairSystm = $tempArray[0];
+	
+	setAttr ($hairSystm + ".dispPercent") 5;
+	setAttr ($hairSystm + ".rhLengthMode") 1;
+	setAttr ($hairSystm + ".rhMode") 1;
+	setAttr ($hairSystm + ".geomNappeOrient") 1;
+	setAttr ($hairSystm + ".geomRootSize") 0.005;
+	setAttr ($hairSystm + ".geomTipSize") 0.001;
+	
+	parent $hairSysPar $hairSysGrp;
+	
+	
+	// ------------------------------------------------------------
+	// -- Return the created emitter
+	//
+	select -r $combEmitter;
+	return $combEmitter;
+}

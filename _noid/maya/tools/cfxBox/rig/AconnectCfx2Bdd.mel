@@ -1,0 +1,146 @@
+//=============================================================================
+//
+//	Connect CFX	to BDD	- Script that gets all HiDef CFX objects, and connects them to HiDef BDD objects
+//						- Gets corresponding BDD:hiDefObj for each Cfx:hiDefObj
+//						- Connects each CFX object to BDD object with a blendshape
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.1
+//
+// Created  :    10/09/2010
+// Modified :    14/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AconnectCfx2Bdd" to launch the script
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that gets all HiDef CFX objects, and connects them to HiDef BDD objects
+//
+//		>> returns the list of all connected BDD objects
+//
+//-------------------------------------------------------------------------
+
+global proc string[] AconnectCfx2Bdd()
+{
+	string $nClothNodes[];
+	string $cfxNameSpc;
+	string $cfxObjs[];
+	string $curCfx;
+	string $baseName;
+	string $objListNS[];
+	string $curObjNS;
+	string $bddObj;
+	string $cfxGrp;
+	string $cfxDupli[];
+	string $curCfxBS[];
+	string $srcBSTagets[];
+	string $destBSConns[];
+	string $bddObjs[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Set current nameSpace to the default
+	//
+	namespace -setNamespace ":";
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the namespace of CFX objects
+	//
+	$nClothNodes = `ls -type transform -recursive on "*_nCloth"`;
+	$cfxNameSpc  = `match "^[^.]*:" $nClothNodes[0]`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the list of CFX:HiDef objects
+	//
+	$cfxObjs = `ls -type transform ($cfxNameSpc + "*_cfx")`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Connect the CFX:HiDef object to the corresponding BDD:HiDef
+	//
+	for ($curCfx in $cfxObjs)
+	{
+		// ------------------------------------------------------------
+		// -- Get all namespaced objects with the same base name as $curCfx
+		//
+		$baseName  = `substitute "^[^.]*:" $curCfx ""`;
+		$objListNS = `ls -type transform -recursive on ("*:" + $baseName)`;
+		$bddObj    = "";
+		
+		
+		// ------------------------------------------------------------
+		// -- Match the one having a "BDD" namespace
+		//
+		for ($curObjNS in $objListNS)
+		{
+			if (`gmatch $curObjNS "*BDD*"`)
+			{
+				$bddObj = $curObjNS;
+				break;
+			}
+		}
+		
+		if ($bddObj == "")
+		{
+			warning ("No \"BBD:\" object matches \"" + $curCfx + "\" ! Skipping... \n");
+			continue;
+		}
+		
+		
+		// ------------------------------------------------------------
+		// -- Duplicate the CFX:HiDef obj and connect it to the BDD:HiDef obj
+		//
+		$cfxGrp   = `createNode transform -n $baseName`;
+		$cfxDupli = A_dupliObj({$curCfx});
+		parent $cfxDupli $cfxGrp;
+		
+		// BlendShape a source duplicate to avoid namespace errors (if source is a Reference)
+		$curCfxBS = `blendShape -n "blendShape_CFX_#" -before $cfxGrp $bddObj`;
+		setAttr ($curCfxBS[0] + ".w[0]") 1;
+		$srcBSTagets = `ls -type shape (listHistory ("-lv", 1, $curCfxBS[0]) )`;
+		
+		// Replace [ dupli# > BS ] connections by [ source# > BS ]
+		$destBSConns = `connectionInfo -dfs ($srcBSTagets[0] + ".worldMesh[0]")`;
+		disconnectAttr ($srcBSTagets[0] + ".worldMesh[0]") $destBSConns[0];
+		connectAttr -f ($curCfx + ".worldMesh[0]") $destBSConns[0];
+		
+		delete $cfxGrp;
+		
+		
+		$bddObjs[size($bddObjs)] = $bddObj;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all connected BDD objects
+	//
+	select -r $bddObjs;
+	return $bddObjs;
+}
+

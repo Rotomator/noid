@@ -1,0 +1,779 @@
+//=============================================================================
+//
+//	C.FX. Box 	- Interface that includes all tools needed for Character FX dept.
+//				- Modeling tools : Pivot editing, Vtx Snapping, UV/Shading Transfert, etc
+//				- Rig tools : Rivet, OutMesh/Proxy, load XML, Auto-Constraint, nCloth UI, Copy Skin, etc
+//				- Hair tools : Hair/Fur to Bands and autoRig, nCloth Presets, wrap Bands, Bake hair Density, etc
+//				- Simu. tools : Export/Import Cache, CorrecFrame, Sticky cluster, etc
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.7
+//
+// Created  :    19/08/2010
+// Modified :    24/11/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- set the $gCFXBoxPath global variable to the path of the "CFXBox" folder 
+//				- ie. >> global string $gCFXBoxPath = "/u/alih/Scripts/CFXBox";
+//				- use "CFXBox" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+//-------------------------------------------------------------------------
+//
+// Procedure that lists all CFXBox scripts and sources them
+//
+//-------------------------------------------------------------------------
+
+
+
+global proc CFXB_sourceScripts()
+{
+	global string $gCFXBoxPath;
+	
+	string $modeScripts[];
+	string $rigScripts[];
+	string $hairScripts[];
+	string $simuScripts[];
+	string $curScript;
+	string $sourceCMD;
+	string $TmpDir;
+	string $userEnvName;
+	string $cmd;
+	
+	// ------------------------------------------------------------
+	// -- List all MEL scripts
+	//
+    $gCFXBoxPath = "C:/_noid/maya/tools/CFXBox";
+	$modeScripts = `getFileList -folder ($gCFXBoxPath + "/mode/") -filespec "*.mel"`;
+	$rigScripts  = `getFileList -folder ($gCFXBoxPath + "/rig/")  -filespec "*.mel"`;
+	$hairScripts = `getFileList -folder ($gCFXBoxPath + "/hair/") -filespec "*.mel"`;
+	$simuScripts = `getFileList -folder ($gCFXBoxPath + "/simu/") -filespec "*.mel"`;
+	
+	$userEnvName = `getenv "USER"`;
+
+	
+	// ------------------------------------------------------------
+	// -- Source all MEL scripts
+	//
+	for ($curScript in $modeScripts)
+	{
+		$sourceCMD = ( "source \"" + $gCFXBoxPath + "/mode/" + $curScript + "\"" );
+		eval $sourceCMD;
+	}
+	for ($curScript in $rigScripts)
+	{
+		$sourceCMD = ( "source \"" + $gCFXBoxPath + "/rig/" + $curScript + "\"" );
+		eval $sourceCMD;
+	}
+	for ($curScript in $hairScripts)
+	{
+		$sourceCMD = ( "source \"" + $gCFXBoxPath + "/hair/" + $curScript + "\"" );
+		eval $sourceCMD;
+	}
+	for ($curScript in $simuScripts)
+	{
+		$sourceCMD = ( "source \"" + $gCFXBoxPath + "/simu/" + $curScript + "\"" );
+		eval $sourceCMD;
+	}
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc CFXB_ARTpivVtx()
+{
+	string $window	   = "win_CFXBox";
+	string $f_pivVtxf = ($window+"_pivVtxf");
+	int    $vtxNbr 	   = `intField -q -v $f_pivVtxf`;
+	string $sel[];
+
+	
+	$sel = `ls -sl -type transform`;
+	
+	if (`size($sel)` == 0)
+	{
+		error "Select at least one Mesh !";
+	}
+	else
+	{
+		ART_pivVtx $sel $vtxNbr;
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that calls the ABOUT window
+//
+//-------------------------------------------------------------------------
+//
+global proc CFXBoxAbout(string $version)
+{
+	string $winAbout = "win_CFXBox_about";
+
+	windowPref -enableAll false;
+
+	if (`window -exists $winAbout`)
+		deleteUI -window $winAbout;
+
+	$winAbout =`window -title "About..."
+		-iconName "About win_CFXBox"
+		-toolbox true
+		-sizeable false
+		-widthHeight 300 300
+		-topEdge 256
+		-leftEdge 512
+		$winAbout`;
+
+	columnLayout -adjustableColumn true;
+
+		text -label "";
+		text -label " Script    : cfxBox" -align "left";
+		text -label (" Version : "+ $version) -align "left";
+		text -label " Creator : Ali" -align "left";
+		text -label " Contact : chibi_ali@homtail.com" -align "left";
+		text -label "";
+		text -label "";
+		text -label " Features : " -align "left";
+		text -label "";
+		text -label " Interface that includes all tools needed for Character FX dept." -align "left";
+		text -label "";
+		text -label "";
+		text -label " - Modeling tools : " -align "left";
+		text -label "    Pivot editing, Vtx Snapping, UV/Shading Transfert, Object copy, etc" -align "left";
+		text -label "";
+		text -label " - Cloth Rig tools : " -align "left";
+		text -label "    Rivet, OutMesh/Proxy, load XML, Auto-Constraint, nCloth UI, Copy Skin, etc" -align "left";
+		text -label "";
+		text -label " - Hair Rig tools : " -align "left";
+		text -label "    Hair/Fur to Bands and autoRig, nCloth Presets, wrap Bands, Bake hair Density, etc" -align "left";
+		text -label "";
+		text -label " - Simulation tools : " -align "left";
+		text -label "    Export/Import Cache, CorrecFrame, Sticky cluster, etc" -align "left";
+		text -label "";
+
+	windowPref -enableAll true;
+	showWindow $winAbout;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc CFXBox()
+{
+	global string $gCFXBoxPath;
+	
+	string $version = "v1.82";
+	string $window = "win_CFXBox";
+	string $iconPath = ($gCFXBoxPath + "/icons/");
+	string $newName=`file -q -sceneName`;
+    string $CfxName=`match "[^/\\]*$" $newName`;
+    string $CfxNameLite=`substitute ".ma" $CfxName ""`;
+
+	int $intrfHgt = 550;
+	
+	
+	// ------------------------------------------------------------
+	// -- Source all needed scripts
+	//
+	CFXB_sourceScripts();
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref  -q -topEdge  $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge  $window`;
+		windowPref -remove $window;
+
+		$window = `window	-mb 1 -tbm 0 -rtf 0 -title 		$CfxNameLite//("CFX. Box " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"CFXBox"
+							-width 		215
+							-height 	$intrfHgt
+							-toolbox 	false
+							-sizeable	false
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-mb 1 -tbm 0 -rtf 0 -title 		$CfxNameLite//("C.FX. Box " + $version)
+							-iconName 	"CFXBox"
+							-width 		215
+							-height 	$intrfHgt
+							-toolbox	 false
+							-sizeable	false
+
+							$window`;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Create a Form Layout to contain window's body
+	//
+	string $parentFrmLyt = `formLayout -numberOfDivisions 100 myFrmLyt`;
+	
+		// Create a Column Layout to contain the menu
+		//
+		string $parentCoLyt = `columnLayout -adjustableColumn true myCoLyt`;
+
+			// Create a menu for the window
+			//
+			string $menuBarLayout = `menuBarLayout`;
+			setParent ..;
+
+			//separator -height 10 -style "none";
+		
+		setParent ..;
+		
+		
+		// ------------------------------------------------------------
+		// -- TAB Layout 
+		//
+
+		string $mainTabLyt = `tabLayout -innerMarginWidth 5 -innerMarginHeight 5 ($window+"_tabLyt")`;
+		
+
+			// ------------------------------------------------------------
+			// MODELING layout
+			//
+			string $modeLyt = `gridLayout -numberOfColumns 2 -cellWidth 120 modeLyt01`;
+				
+				// Pivots Fields
+				string $b_piv000  = `iconTextButton -l "Pivot 000"
+									-style "iconAndTextHorizontal"
+									-image1 "orientJoint.png" -width 200
+									-ann "Places pivots of selected hierarchy at world's origin"
+									-c "ARTpivOrigHi"
+									($window+"_piv000")`;
+				
+				string $b_pivCpy  = `iconTextButton -l "Pivot Copy" 
+									-style "iconAndTextHorizontal"
+									-image1 "orientJoint.png" -width 200
+									-ann "Places destination pivot like the source one"
+									-c "ARTpivCopy"
+									($window+"_pivCpy")`;
+				
+				string $b_pivSnap  = `iconTextButton -l "Snap2Pivot" 
+									-style "iconAndTextHorizontal"
+									-image1 "orientJoint.png" -width 200
+									-ann "Snaps the destination object to the source object's pivot"
+									-c "ARTsnapToPiv"
+									($window+"_pivSnap")`;
+				
+				separator -height 10 -style "none";
+				
+				string $b_pivVtx	= `iconTextButton -l "Pivot2Vtx   : "
+									-style "iconAndTextHorizontal"
+									-image1 "orientJoint.png" -width 200
+									-ann "Snaps the Meshe's pivot to a vertex"
+									-c "CFXB_ARTpivVtx"
+									($window+"_pivVtx")`;
+				
+				string $f_pivVtxf	= `intField -ed 1 -v 0
+									-ann "Snaps the Meshe's pivot to a vertex"
+									($window+"_pivVtxf")`;
+				
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+				// Snap VTX Fields
+				string $b_snpAPt  = `iconTextButton -l "SnapAutoPts" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "snapAutoPts.png") -width 200
+									-ann "Snaps selected vertices to the selected object (vertex to vertex - same topology)"
+									-c "snapAutoPts"
+									($window+"_snpAPt")`;
+				
+				string $b_snpPnt  = `iconTextButton -l "SnapPoint" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "snapPoint.png") -width 200
+									-ann "Snaps selected vertices on selected object's closest vertices"
+									-c "SnapClosestPoint"
+									($window+"_snpPnt")`;
+				
+				string $b_snpStr  = `iconTextButton -l "Snap Start" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "snapOnSurfaceStart.png") -width 200
+									-ann "Snap On Surface START : Snaps selected vertices on closest Surface"
+									-c "snapOnSurface \"start\""
+									($window+"_snpStr")`;
+				
+				string $b_snpStp  = `iconTextButton -l "Snap Stop" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "snapOnSurfaceStop.png") -width 200
+									-ann "Snap On Surface STOP : Stops the script"
+									-c "snapOnSurface \"stop\""
+									($window+"_snpStp")`;
+				
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+				// Various Fields
+				string $b_dupObj  = `iconTextButton -l "Dupli Obj" 
+									-style "iconAndTextHorizontal"
+									-image1 "duplicateCurve.png" -width 200
+									-ann "Performs a clean duplicate of the selected poly/nurbs/subdiv objects"
+									-c "A_dupliObj(`ls -sl`)"
+									($window+"_dupObj")`;
+				
+				string $b_ed2crv  = `iconTextButton -l "edge2Curve" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "edge2Curve.png") -width 200
+									-ann "Converts each selected poly edges to nurbs curves"
+									-c "Aedges2Curves"
+									($window+"_ed2crv")`;
+				
+				string $b_clnMsh  = `iconTextButton -l "Clean Mesh"
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "cleanMesh.png") -width 200
+									-ann "Cleans and freezes selected POLYs"
+									-c "AcleanMesh"
+									($window+"_clnMs")`;
+				
+				string $b_abSym  = `iconTextButton -l "abSymMesh" 
+									-style "iconAndTextHorizontal"
+									-image1 "polyMirrorCut.png" -width 200
+									-ann "Script that allows to check/copy/edit symetry"
+									-c "abSymMesh"
+									($window+"_abSym")`;
+				
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+								// Proxy Fields
+				string $b_cOutM  = `iconTextButton -l "OutMesh" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "outMesh.png") -width 200
+									-ann "Create an OutMesh (proxy that inherits all deformations) for each selected mesh"
+									-c "A_outMesh(`ls -sl`)"
+									($window+"_cOutM")`;
+				
+				string $b_conOM  = `iconTextButton -l "Connect" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "connOutMesh.png") -width 200
+									-ann "Connects the selected Source object to the selected Destination object"
+									-c "A_updateOutMesh(`ls -sl`, 1)"
+									($window+"_conOM")`;
+				
+				string $b_updOM  = `iconTextButton -l "Update" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "updateOutMesh.png") -width 200
+									-ann "Uses the selected Source object to update selected Destination object"
+									-c "A_updateOutMesh(`ls -sl`, 0)"
+									($window+"_updOM")`;
+									
+													string $empty  = `iconTextButton -l "" 			
+									($window+"$empty")`;
+				
+				
+									
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+				// Surfacing Fields
+				string $b_cpyUVC  = `iconTextButton -l "Copy UV C." 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "copyUVs.png") -width 200
+									-ann "Transfers UV in COMPONENT mode, from source to destination object without history modification"
+									-c "ARTtransferUV(4)"
+									($window+"_cpyUVC")`;
+				
+				string $b_cpyUVW  = `iconTextButton -l "Copy UV W." 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "copyUVs.png") -width 200
+									-ann "Transfers UV in WORLD mode, from source to destination object without history modification"
+									-c "ARTtransferUV(0)"
+									($window+"_cpyUVW")`;
+				
+				string $b_cpyShd  = `iconTextButton -l "Copy Shad" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "copyShading.png") -width 200
+									-ann "Transfers shading from source to destination object"
+									-c "ARTtransferObjShading"
+									($window+"_cpyShd")`;
+
+			setParent ..;
+			
+			
+			// ------------------------------------------------------------
+			// RIG layout
+			//
+			string $rigLyt = `scrollLayout -w 200 -h $intrfHgt rigLyt01`;
+								
+				// Rivets Fields
+				string $b_rivFol  = `iconTextButton -l "dj Rivet" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "djRivet.png") -width 200
+									-ann "Constrains multiple selected objects to the last selected one"
+									-c "djRivet"
+									($window+"_rivFol")`;
+				
+				string $b_rivEdg  = `iconTextButton -l "Rivet (edge)" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "rivetEdge.png") -width 200
+									-ann "Create a rivet on selected surface. Select 2 edges on polygons OR select 1 point on NURBS surface"
+									-c "animRivet"
+									($window+"_rivEdg")`;
+				
+				string $b_cpySkn  = `iconTextButton -l "Copy Skin" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "copySkin.png") -width 200
+									-ann "Copies the skin from a source Mesh to the desination one. Meshes can have different topologies"
+									-c "ARTcopySkin"
+									($window+"_cpySkn")`;
+				
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+				// Cloth Fields
+				string $b_crtGrp  = `iconTextButton -l "Create Groups" 
+									-style "iconAndTextHorizontal"
+									-image1 "group.png" -width 200
+									-ann "Create the cloth/hair setup hierarchy groups"
+									-c "create_nGroup"
+									($window+"_crtGrp")`;
+				
+				
+				
+				string $b_autCst  = `iconTextButton -l "Auto. Constraint" 
+									-style "iconAndTextHorizontal"
+									-image1 "pin.png" -width 200
+									-ann "Script that setups nCloth to constrain automaticlly at given pose"
+									-c "AautoConstraint"
+									($window+"_autCst")`;
+									
+									string $b_initMsh  = `iconTextButton -l "Set from InitMesh" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "initFromMesh.png") -width 200
+									-ann "Sets nCloth initial state from each \"initMesh\" object"
+									-c "AsetFromInitMesh"
+									($window+"_initMsh")`;
+									
+													string $b_impXML  = `iconTextButton -l "Settings from XML" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "importFromXml.png") -width 200
+									-ann "Script that imports nCloth settings from an XML cache file"
+									-c "AsettingsFromXml"
+									($window+"_impXML")`;
+				
+				
+
+
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+
+				string $b_slGtac  = `iconTextButton -l "Select all GTA/GTC" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "selGtaGtc.png") -width 200
+									-ann "Selects all GTA and GTC objects in the scene"
+									-c "select -r `ls -type transform -recursive on \"*_gta\" \"*_gtc\"`;"
+									($window+"_slGtac")`;
+				
+				string $b_conGtac  = `iconTextButton -l "Connect GTA/GTC" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "conGtaGtc.png") -width 200
+									-ann "Gets all GTA and GTC objects, and connects them to an animation source (objects or cache)"
+									-c "AconnectGtaGtc"
+									($window+"_conGtac")`;
+
+				string $b_conBdd  = `iconTextButton -l "Connect Cfx 2 BDD" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "conCfx2Bdd.png") -width 200
+									-ann "Gets all HiDef CFX objects, and connects them to HiDef BDD objects"
+									-c "AconnectCfx2Bdd"
+									($window+"_conBdd")`;
+			setParent ..;
+			
+			
+			// ------------------------------------------------------------
+			// HAIR layout
+			//
+			string $hairLyt = `scrollLayout -w 200 -h $intrfHgt hairLyt01`;
+				
+				// Bands generation Fields
+				string $b_hT2B  = `iconTextButton -l "Tubes 2 Bands" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "tub2Bnd.png") -width 200
+									-ann "Script that converts selected Nurbs TUBES to Poly BANDS"
+									-c "AhairTubes2Bands"
+									($window+"_hT2B")`;
+				
+				string $b_hC2B  = `iconTextButton -l "Curves 2 Bands" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "crv2Bnd.png") -width 200
+									-ann "Script that converts selected Nurbs CURVES to Poly BANDS"
+									-c "AhairCurves2Bands"
+									($window+"_hC2B")`;
+				
+				string $b_aC2E  = `iconTextButton -l "Attach Curves 2 Emitter" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "attchCrv.png") -width 200
+									-ann "Script that attaches selected Nurbs CURVES to a Poly EMITTER"
+									-c "AattachCurves2Emitter"
+									($window+"_aC2E")`;
+				
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+				// nCloth Fields
+				string $b_crtNC  = `iconTextButton -l "Create nCloth" 
+									-style "iconAndTextHorizontal"
+									-image1 "nClothCreate.png" -width 200
+									-ann "Script that creates and setups nCloth with custom Presets + Constraints selected VTX/FACES to keep them stiff."
+									-c "AcreateAndSetNCloth"
+									($window+"_crtNC")`;
+				
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+				// Bands finaling Fields
+				string $b_selBnd  = `iconTextButton -l "Select All Bands" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "selBnd.png") -width 200
+									-ann "Selects all poly BANDS in the scene (due to their \"combineOrder\" extraAttr)"
+									-c "AselectAllBands"
+									($window+"_selBnd")`;
+				
+				string $b_separB  = `iconTextButton -l "Export Bands 4Rig" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "expBnd.png") -width 200
+									-ann "Separates and renames poly BANDS according to their intial TUBES/CURVES"
+									-c "AseparateBands"
+									($window+"_separB")`;
+				
+				string $b_wrpB2H  = `iconTextButton -l "Wrap Bands 2 Hairs" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "wrpB2H.png") -width 200
+									-ann "Script that wraps Hairs (Nurbs TUBES/CURVES) to selected poly BANDS"
+									-c "AwrapBands2Hairs"
+									($window+"_wrpB2H")`;
+				
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+				// Hair finaling Fields
+				string $b_xtrcGE  = `iconTextButton -l "Extract Guides and Emitter" 
+									-style "iconAndTextHorizontal"
+									-image1 "sphere.png" -width 200
+									-ann "Extracts guides and emitters from selected Nurbs TUBES"
+									-c "bl_createHairEmitter"
+									($window+"_xtrcGE")`;
+				
+				string $b_bkHTD  = `iconTextButton -l "Bake Tubes Maps" 
+									-style "iconAndTextHorizontal"
+									-image1 "sphere.png" -width 200
+									-ann "Script that gets densityRatio, cutLength, borders from selected hairTUBES and bakes them into EMITTER's UVs"
+									-c "AbakeHairTubesMaps"
+									($window+"_bkHTD")`;
+			setParent ..;
+			
+			
+			// ------------------------------------------------------------
+			// SIMU layout
+			//
+			string $simuLyt = `scrollLayout -w 200 -h $intrfHgt simuLyt01`;
+				
+			
+
+			
+			
+			
+				// Cloth correction Fields
+			/*	string $b_btyClt  = `iconTextButton -l "Make beautiful Cloth !" 
+									-style "iconAndTextHorizontal"
+									-image1 "sphere.png" -width 200
+									-ann ""
+									-c "print(\"C'est caaaaa, dans tes reves peut etre...\\n\")"
+									($window+"_btyClt")`;
+								*/
+				
+				separator -height 10 -style "none";
+
+				string $b_Recenter  = `iconTextButton -l " Static Animation" 
+									-style "iconAndTextHorizontal"
+									-image1 ("createPose.png") -width 200
+									-ann "Script for simulate in static pose"
+									-c "recenterInt"
+									($window+"_recenter")`;
+									
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+				
+				string $b_nClEvl  = `iconTextButton -l "Dynamic Eval." 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "dynEval.png") -width 200
+									-ann "Script to enable/disable nCloth/nucleus/constraints evaluations"
+									-c "dynamicEval"
+									($window+"_nClEvl")`;		
+									
+				string $b_conBdd  = `iconTextButton -l "Create All Caches" 
+									-style "iconAndTextHorizontal"
+									-image1 "nClothCacheExisting.png" -width 200
+									-ann "Create caches for nCloth objects visible"
+									-c "createCaches"
+									($window+"_cachesCtrl")`;		
+									
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+													
+				string $b_stikOG  = `iconTextButton -l "Sticky Cluster (O.G.)" 
+									-style "iconAndTextHorizontal"
+									-image1 "softMod.png" -width 200
+									-ann "Creates a sticky cluster on selected mesh (based on Olivier Georges' script)"
+									-c "launchStickyOG"
+									($window+"_stikOG")`;	
+				
+				string $b_corFrm  = `iconTextButton -l "Correc. Frame" 
+									-style "iconAndTextHorizontal"
+									-image1 "replaceCacheFrame.png" -width 200
+									-ann "Script that corrects animation or simulation \"plops\" at given frames"
+									-c "AcorrecFrame"
+									($window+"_corFrm")`;
+				
+																			
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+				
+				
+				// Cloth setup Fields
+				
+				string $b_extCloth  = `iconTextButton -l "Extract Cloth" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "cut.png") -width 200
+									-ann "create cloth on selected faces"
+									-c "customC"
+									($window+"_extCloth")`;
+									
+				string $b_conBdd  = `iconTextButton -l "Create wind driver" 
+									-style "iconAndTextHorizontal"
+									-image1 "spotlight.png" -width 200
+									-ann "Create WindDriver for nCloth objects selected"
+									-c "create_windCtrl"
+									($window+"_windCtrl")`;
+
+									
+				separator -height 10 -style "none";
+				separator -height 10 -style "none";
+				
+				// Cache Fields
+				
+				string $b_wipCache  = `iconTextButton -l "wipCache" 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "workInCache.png") -width 200
+									-ann "reassign or create caches on duplicated shapes of the selected"
+									-c "workInCache"
+									($window+"_wipCache")`;
+									
+				string $b_xptKch  = `iconTextButton -l "Export/Import Cache" 
+									-style "iconAndTextHorizontal"
+									-image1 "exportCache.png" -width 200
+									-ann "Script that exports/imports geometry cache from selection"
+									-c "AexportGeoCache"
+									($window+"_xptKch")`;
+
+				string $b_geoHi  = `iconTextButton -l "GeoConnect HI." 
+									-style "iconAndTextHorizontal"
+									-image1 ($iconPath + "animation.png") -width 200
+									-ann "Script to geocache and connect cfx to BDD"
+									-c "cacheHiInt"
+									($window+"_geoHI")`;
+
+
+									
+									
+			setParent ..;
+
+			
+		setParent ..;
+
+	
+	
+	// ------------------------------------------------------------
+	// -- Edits the MAIN FORM layout
+	//
+	formLayout -edit
+		-attachForm     $parentCoLyt	"top"     0
+		-attachForm     $parentCoLyt	"left"    0
+		-attachForm     $parentCoLyt	"right"   0
+		
+		-attachControl  $mainTabLyt	"top" 	  0 $parentCoLyt
+		-attachForm     $mainTabLyt	"left"    5
+		-attachForm     $mainTabLyt	"right"   5
+		-attachForm 	 $mainTabLyt	"bottom"  5
+		
+	$parentFrmLyt;
+	
+	
+	// ------------------------------------------------------------
+	// -- Edits the TAB Layout
+	//
+	tabLayout -edit
+		-tabLabel $modeLyt "Mode"
+		-tabLabel $rigLyt "RIG"
+		-tabLabel $hairLyt "Hair"
+		-tabLabel $simuLyt "Simu"
+
+		
+	$mainTabLyt;
+	
+	
+	// ------------------------------------------------------------
+	// -- Edits the window's menu
+	//
+	setParent $menuBarLayout;
+		menu -label "File..." -helpMenu true;
+			menuItem -label "Shelf Edit" -c "uu_shelfEdit";
+
+			//menuItem -label "About..." -c ("CFXBoxAbout \"" + $version + "\"") helpMit;
+
+			
+	
+	// ------------------------------------------------------------
+	// -- Launch the window
+	//
+	showWindow $window;
+}
+

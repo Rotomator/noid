@@ -1,0 +1,149 @@
+// SnapClosestPoint Beta 0.1
+// From Sylvain Degrotte -> www.kio80.com
+// Ce script permet de snapper une selection de point sur une surface. Il prend le point le plus proche
+// 
+
+// Utilisation :
+// caler les deux mesh (l'un sur l'autre)
+// Attention, il faut que le plugin ClosestPointOnMesh soit Loader
+
+global proc float SCP_computeCalcDist(float $a[], float $b[])
+{
+	float $result = sqrt( ($b[0]-$a[0])*($b[0]-$a[0]) + ($b[1]-$a[1])*($b[1]-$a[1]) + ($b[2]-$a[2])*($b[2]-$a[2]) );
+		
+	return $result;
+}
+
+global proc string SCP_ClosestPnt(float $srcPos[], string $NomMesh, string $NomNode)
+{
+//------- Variables
+float $pntPos[];
+int $resultVtx;
+int $faceIndex;
+string $nomClosestFace;
+float $posResult[];
+string $VtxSet[];
+string $buffer[];
+string $NomMeshShape[];
+float $newPntDist;
+float $pntDist;
+
+//--------------------------------
+
+$resultVtx = -1;
+$pntDist = 10000.1;
+$newPntDist = 100000.1;
+
+setAttr ($NomNode + ".inPosition") $srcPos[0] $srcPos[1] $srcPos[2];
+
+$faceIndex = `getAttr ($NomNode + ".closestFaceIndex")`;
+$nomClosestFace = ($NomMesh + ".f[" + $faceIndex + "]");
+
+$posResult = `getAttr ($NomNode + ".position")`;
+
+select -r $nomClosestFace;
+int $traversal = 1;
+polySelectConstraint -pp $traversal -t 0x0008;
+polySelectConstraint -pp $traversal -t 0x0008;
+string $faces[] = `ls -sl -fl -type float3`;
+select -cl;
+
+$VtxSet = `polyInfo -faceToVertex $faces`;
+
+int $i;
+int $j;
+
+for ($j=2; $j < `size($VtxSet)`; $j++)
+{
+	tokenize($VtxSet[$j], $buffer);	
+	
+	for ($i=2; $i < `size($buffer)`; $i++)
+	{
+		$pntPos = `xform -q -ws -t ($NomMesh + ".vtx[" + $buffer[$i] + "]")`;
+		//print ($NomMesh + ".vtx[" + $buffer[$i] + "]" + "\n");
+		$newPntDist = SCP_computeCalcDist($srcPos, $pntPos);
+		//print $newPntDist;
+		//print "\n";
+		//print $pntDist;
+		//print "\n";
+		if ( $pntDist > $newPntDist )
+		{
+			$pntDist = $newPntDist;
+			//print $pntDist;
+			$resultVtx = $buffer[$i];				
+		}
+	}// fin pour
+}// fin pour	
+
+
+return ($NomMesh + ".vtx[" + $resultVtx + "]");
+
+}// fin PROC
+
+
+global proc SnapClosestPointApply()
+{
+string $sel[];
+string $meshSource;
+string $NomMeshShape[];
+string $tmp[];
+string $resultPoint;
+string $meshDest;
+
+$sel = `ls -sl -fl -type float3`;
+
+$tmp = `ls -sl -type transform`;
+$meshSource = $tmp[0];
+//print $meshSource;
+
+tokenize $sel[0] "." $tmp;
+$meshDest = $tmp[0];
+//print $meshDest;
+
+
+if ( $meshSource == "" || `size($sel)` <= 0 )
+{
+print "Erreur : $meshSource == null || no point selected";
+} else
+{
+	int $i;
+	float $pntPos[];
+	int $nbMeshVtx;
+	
+	$NomNode = `createNode closestPointOnMesh`;
+	
+	$NomMeshShape = `listRelatives -s $meshSource`;
+	
+	connectAttr -f ($NomMeshShape[0] + ".outMesh") ($NomNode + ".inMesh");
+	
+	$nbMeshVtx = `size($sel)`;
+	for ($i=0; $i < $nbMeshVtx; $i++)
+	{
+			$pntPos = `xform -q -ws -t $sel[$i]`;
+			//print("position " + $pntPos[0] + " " + $pntPos[1] + " " + $pntPos[2]);
+			// trouve le point le plus proche
+			$resultPoint = SCP_ClosestPnt($pntPos, $meshSource, $NomNode);
+			//print ( $meshSource + ".vtx[" + $resultClosestVtxIndex + "] \n");
+			$pntPos = `xform -q -ws -t $resultPoint`;				
+			xform -ws -t $pntPos[0] $pntPos[1] $pntPos[2] $sel[$i];
+
+	}// fin pour
+	
+	delete $NomNode;
+
+ }// fin si		
+
+}// fin proc
+
+
+//-------------------------------------------------------------------------
+// Proc window
+//-------------------------------------------------------------------------
+// procedure qui stocke la selection de l'objet de Dest
+
+global proc SnapClosestPoint()
+{
+SnapClosestPointApply;
+  
+}// fin proc window
+

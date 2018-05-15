@@ -1,0 +1,58 @@
+//=============================================================================
+//
+//	AselectAllBands		- Script that selects all poly BANDS in the scene
+//						- Uses the "combineOrder" extra Attribute to find them
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.5
+//
+// Created  :    02/09/2010
+// Modified :    16/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AselectAllBands" to launch the script
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+global proc string[] AselectAllBands()
+{
+	string $polyList[];
+	string $curPoly;
+	string $bandList[];
+	string $result[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Get all poly objects in the scene
+	//
+	$polyList = `stringArrayRemoveDuplicates(listTransforms ("-type mesh"))`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Keep only those having a "combineOrder" extra Attribute
+	//
+	for ($curPoly in $polyList)
+	{
+		if (`attributeExists "combineOrder" $curPoly`)
+		{
+			$bandList[size($bandList)] = $curPoly;
+		}
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Return the poly BANDS
+	//
+	$result = stringArrayRemoveDuplicates($bandList);
+	select -r $result;
+	return $result;
+}
+

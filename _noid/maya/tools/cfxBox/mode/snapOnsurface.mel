@@ -1,0 +1,76 @@
+global proc snapOnSurface( string $mode)
+{		
+	string $groupName = "group_snapOnSurface";
+	global float $g_SOS_pos[];
+	global string $g_SOS_sel[];
+	global int   $g_SOS_nVertex;
+	//global string $g_SOS_spl[];
+	global string $g_SOS_spl;
+	global int $g_SOS_scriptJobNum = -1;
+	
+	if( objExists( $groupName ) )
+	{
+		delete $groupName;
+		clear $g_SOS_pos;
+		//clear $g_SOS_spl;
+	}
+	
+	if( ($g_SOS_scriptJobNum>0) && (`scriptJob -exists $g_SOS_scriptJobNum` != 0) )
+	{
+		scriptJob -k $g_SOS_scriptJobNum;
+		$g_SOS_scriptJobNum = -1;
+	}
+	
+	if( $mode == "start" )
+	{		
+		$g_SOS_sel = `ls -sl`;
+		int $pEv[] = `polyEvaluate -v $g_SOS_sel[0]`;
+		$g_SOS_nVertex = $pEv[0];
+		$g_SOS_pos = `xform -q -t ($g_SOS_sel[0]+".vtx[0:"+$g_SOS_nVertex+"]")`;
+		$i = 0;
+		
+		$g_SOS_spl = `createNode transform`;
+		
+		geometryConstraint $g_SOS_sel[1] $g_SOS_spl;
+		
+		select -cl;
+		
+		select -add $g_SOS_spl;	
+		
+		group -n $groupName;
+		
+		string $stTabTemp[];
+		tokenize $g_SOS_sel[0] "." $stTabTemp;
+		g_SOS_moveCB();
+	}
+}
+
+global proc g_SOS_moveCB()
+{
+	float $location[3];
+	global float $g_SOS_pos[];
+	global string $g_SOS_sel[];
+	//global string $g_SOS_spl[];
+	global string $g_SOS_spl;
+	
+	print( "in CB\n" );
+	
+	global int   $g_SOS_nVertex;
+	
+	float $curPos[] = `xform -q -t ($g_SOS_sel[0]+".vtx[0:"+$g_SOS_nVertex+"]")`;
+	int $i = 0;
+	for( ; $i<$g_SOS_nVertex; $i++ )
+	{
+		if( ($g_SOS_pos[3*$i]-$curPos[3*$i]) || ($g_SOS_pos[3*$i+1]-$curPos[3*$i+1]) || ($g_SOS_pos[3*$i+2]-$curPos[3*$i+2]) )
+		{
+			$location = `xform -q -ws -t ($g_SOS_sel[0]+".vtx["+$i+"]")`;
+			xform -ws -t $location[0] $location[1] $location[2] $g_SOS_spl;
+			$location = `xform -q -ws -t $g_SOS_spl`;
+			xform -ws -t $location[0] $location[1] $location[2] ($g_SOS_sel[0]+".vtx["+$i+"]");
+		}
+	}
+	
+	$g_SOS_pos = $curPos;
+	
+	evalDeferred( "$g_SOS_scriptJobNum = `scriptJob -ro true -ac (\""+$g_SOS_sel[0]+".outMesh\") g_SOS_moveCB`" );
+}

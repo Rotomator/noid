@@ -1,0 +1,726 @@
+//=============================================================================
+//
+//	Auto Constraint - Script that setups nCloth to constrain automaticlly at given pose
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.0
+//
+// Created  :    23/09/2010
+// Modified :    24/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+// Patch	:	 blue 18/11/2010, multiple autoConstraint nCloth on same object
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AautoConstraint" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+//-------------------------------------------------------------------------
+//
+// Procedure that setups nCloth to constrain automaticlly at given pose
+//		<< takes for arg the nCloth's vertices that will be constrained
+//		<< takes for arg the driver mesh that will constrain the nCloth's vertices
+//		<< takes for arg 2 edges of the nCloth Collider that will serve as rivet #1
+//		<< takes for arg 2 edges of the nCloth Collider that will serve as rivet #2
+//		<< takes for arg the frame when nCloth is at neutral pose
+//		<< takes for arg the frame where nCloth should be fully constrained (where constraint is at max)
+//		<< takes for arg the constraint's maximum strength value
+//
+//-------------------------------------------------------------------------
+
+global proc A_autoConstraint(string $srcVtxL[], string $driverMsh, string $collidEdg1[], string $collidEdg2[],
+								int $neutrPoseFrame, int $cstPoseFrame, float $cstMaxStrgt)
+{
+	string $racineName;
+	string $racineTxt;
+	int $racineIndice;
+	string $tempArray[];
+	string $srcPar;
+	string $rootGrp;
+	string $drvVtxL[];
+	string $pnt2PntCnstr[];
+	string $nRigidNode;
+	string $ptpNode;
+	string $collidMsh;
+	string $collidNRigid;
+	string $noAutoColCnstr[];
+	string $rivet1;
+	string $rivet2;
+	string $distDim;
+	string $multNode;
+	string $setRngNode;
+	float  $distVal;
+	string $nCompNode;
+
+	
+	// ------------------------------------------------------------
+	// -- Check arguments
+	//
+	if ( !`size($srcVtxL)` || $srcVtxL[0] == "" )
+	{
+		error ("No nMesh Vertices given !");
+	}
+	else
+	{
+		$srcVtxL = `filterExpand -fullPath false -ex 0 -sm 31 $srcVtxL`;
+		
+		if ( !size($srcVtxL) )
+		{
+			error ("Please give a POLYGONAL object or POLY VTX as source !");
+		}
+
+		$tempArray = `listRelatives -p (listRelatives ("-p", $srcVtxL[0]))`;
+		$srcPar = $tempArray[0];
+	}
+	
+	if ( $driverMsh == "" )
+	{
+		error ("No Driver mesh given (Driver = the one having animation) !");
+	}
+	else
+	{
+		$tempArray = `filterExpand -fullPath false -sm 12 $driverMsh`;
+		
+		if (!size($tempArray)) {
+			error ("Please give a POLYGONAL object as Driver (Driver = the one having animation) !");
+		}
+	}
+	
+	if ( !`size($collidEdg1)` || !`size($collidEdg2)` )
+	{
+		error ("No Collider Edges mesh given !");
+	}
+	else
+	{
+		$collidEdg1 = `filterExpand -fullPath false -ex 1 -sm 32 $collidEdg1`;
+		$collidEdg2 = `filterExpand -fullPath false -ex 1 -sm 32 $collidEdg2`;
+		
+		if ( size($collidEdg1) != 2 ) {
+			error ("Please give 2 EDGES on the Collider in order to create Rivet #1 !");
+		}
+		if ( size($collidEdg2) != 2 ) {
+			error ("Please give 2 EDGES on the Collider in order to create Rivet #2 !");
+		}
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Create ComponentToComponent constraint btwn nMesh.vtx and Driver
+	//
+	$racineTxt="autoCst";
+	$racineIndice=0;
+	do
+	{
+		$racineIndice++;
+		$racineName = $srcPar + "_" + $racineTxt + $racineIndice;
+		$rootGrp  = $racineName + "_Grp";
+	}
+	while ( `objExists $rootGrp` );
+	$rootGrp  = `createNode transform -n $rootGrp`;
+	
+	// Get the same vtx on driver mesh as source mesh
+	$drvVtxL = $srcVtxL;
+	
+	for ( $i=0; $i<size($drvVtxL); $i++ ) {
+		$drvVtxL[$i] = `substitute $srcPar $drvVtxL[$i] $driverMsh`;
+	}
+	
+	select -r $srcVtxL $drvVtxL;
+	$pnt2PntCnstr = `createNConstraint pointToPoint 0`;
+	// en cas de nRigid multiple sur un meme objet, il y a un node commun a tous les nRigid
+	// renvoi alors qu'un dynamicConstraint
+	
+	// rename the constraint nodes
+	for ( $i=0; $i<size($pnt2PntCnstr); $i++ )
+	{
+		if ( `objectType -i "dynamicConstraint" $pnt2PntCnstr[$i]` )
+		{
+			$ptpNode = `rename $pnt2PntCnstr[$i] ($racineName + "_ptpShape#")`;
+			// Set constraint attributes
+			setAttr ($ptpNode + ".constraintMethod") 0;
+			setAttr ($ptpNode + ".strength") 20;
+
+			$tempArray = `listRelatives -p $ptpNode`;
+			parent $tempArray[0] $rootGrp;
+			rename $tempArray[0] ($racineName + "_ptp#");
+		}
+		else if ( `objectType -i "nRigid" $pnt2PntCnstr[$i]` )
+		{
+			$nRigidNode = `rename $pnt2PntCnstr[$i] ($racineName + "_nRigidShape#")`;
+			// Set constraint attributes
+			setAttr ($nRigidNode + ".collide") 0;
+			setAttr ($nRigidNode + ".pushOut") 0;
+			setAttr ($nRigidNode + ".pushOutRadius") 0;
+
+			$tempArray = `listRelatives -p $nRigidNode`;
+			parent $tempArray[0] $rootGrp;
+			rename $tempArray[0] ($racineName + "_nRigid#");
+		}
+	}
+	
+	// ------------------------------------------------------------
+	// -- Check that Collider mesh has it's "collide" attribute turned off
+	//
+	$tempArray = `listRelatives -p (listRelatives ("-p", $collidEdg1[0]))`;
+	$collidMsh = $tempArray[0];
+	
+	$tempArray = `ls -type nRigid (listHistory ("-f", true, "-breadthFirst", $collidMsh))`;
+	$collidNRigid = $tempArray[0];
+	
+	if ($collidNRigid == "")
+	{
+		warning ("Cannot find any nRigid on Collider mesh \"" + $collidMsh + "\" !");
+	}
+	
+	if ( `getAttr ($collidNRigid + ".collide")` == 1)
+	{
+		warning ("The Collider Mesh's \"" + $collidNRigid + "\" has  it's \"collide\" attribute ON, you should turn it OFF !");
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Disable auto-collision on nMesh.vtx
+	//
+	select -r $srcVtxL;
+	$noAutoColCnstr = `createNConstraint collisionExclusion 0`;
+	
+	$noAutoColNode = `rename $noAutoColCnstr[0] ($racineName + "_noAutoColShape#")`;
+	$tempArray = `listRelatives -p $noAutoColNode`;
+	parent $tempArray[0] $rootGrp;
+	rename $tempArray[0] ($racineName + "_noAutoCol#");
+	
+	
+	// ------------------------------------------------------------
+	// -- Create distance tool on Collider
+	//
+	select -r $collidEdg1;
+	$rivet1 = `animRivet`;
+	$rivet1 = `rename $rivet1 ($racineName + "_rivetA1")`;
+	parent $rivet1 $rootGrp;
+	
+	select -r $collidEdg2;
+	$rivet2 = `animRivet`;
+	$rivet2 = `rename $rivet2 ($racineName + "_rivetB1")`;
+	parent $rivet2 $rootGrp;
+	
+	$distDim = `createNode transform -n ($racineName + "_distDim#") -p $rootGrp`;
+	$distDim = `createNode distanceDimShape -n ($racineName + "_distDimShape#") -p $distDim`;
+	connectAttr -f ($rivet1 + ".worldPosition[0]") ($distDim + ".startPoint");
+	connectAttr -f ($rivet2 + ".worldPosition[0]") ($distDim + ".endPoint");
+	
+	
+	// ------------------------------------------------------------
+	// -- Convert distance values to drive the Constraint's strength
+	//
+	$multNode = `createNode multiplyDivide -n ($racineName + "_mult#")`;
+	setAttr ($multNode + ".input1X") -1;
+	connectAttr -f ($distDim + ".distance") ($multNode + ".input2X");
+	
+	$setRngNode = `createNode setRange -n ($racineName + "_setRange#")`;
+	connectAttr -f ($multNode + ".outputX") ($setRngNode + ".valueX");
+	
+	// Get distance at neutral pose
+	currentTime $neutrPoseFrame;
+	$distVal = `getAttr ($multNode + ".outputX")`;
+	setAttr ($setRngNode + ".oldMinX") $distVal;
+	setAttr ($setRngNode + ".minX") 0; // constraint min strength (off at neutral pose)
+	
+	// Get distance at max constraint pose (where constraint is fully active)
+	currentTime $cstPoseFrame;
+	$distVal = `getAttr ($multNode + ".outputX")`;
+	setAttr ($setRngNode + ".oldMaxX") $distVal;
+	setAttr ($setRngNode + ".maxX") $cstMaxStrgt; // constraint max strength
+	
+	// Get the Constraint's nComponentNode and connect the setRange into it's .strength attr
+	currentTime $neutrPoseFrame;
+	select -r $srcVtxL $ptpNode;
+	$nCompNode = getNComponentToEdit(1);
+	
+	if ($nCompNode == "")
+	{
+		error ("Cannot find an nComponent node on constraint " + $ptpNode + " !");
+	}
+	
+	connectAttr -f ($setRngNode + ".outValueX") ($nCompNode + ".strength");
+	
+	
+	// ------------------------------------------------------------
+	// -- Smooth the constraint's weights at borders
+	//
+	// Set the constraint's nComponent node "Map Type" to "Per-Vertex"
+	setAttr ($nCompNode + ".strengthMapType") 1;
+	
+	// Flood the weights to 1
+	select -r $srcVtxL $ptpNode;
+	artAttrNComponentToolScript 4 strength;
+	artAttrCtx -e -sao "absolute" -opacity 1 -value 1 `currentCtx`;
+	artAttrCtx -e -clr `currentCtx`;
+	
+	// Flood the boundaries' weights to 0
+	setToolTo "selectSuperContext";
+	select -r $srcVtxL;
+	polySelectConstraint -pp 3 -t 0x0001; // get selection's boundaries
+	polySelectConstraint -pp 1 -t 0x0001; // grow selection
+	polySelectConstraint -pp 1 -t 0x0001; // grow selection
+	select -add $ptpNode;
+	artAttrNComponentToolScript 4 strength;
+	artAttrCtx -e -sao "absolute" -opacity 1 -value 0 `currentCtx`;
+	artAttrCtx -e -clr `currentCtx`;
+	
+	// Smooth the weights 
+	setToolTo "selectSuperContext";
+	select -r $srcVtxL $ptpNode;
+	artAttrNComponentToolScript 4 strength;
+	artAttrCtx -e -sao "smooth" -op 1 -val 10 `currentCtx`;
+	artAttrCtx -e -clr `currentCtx`;
+	artAttrCtx -e -clr `currentCtx`;
+	
+	// Flood the boundaries' weights to 0.01
+	setToolTo "selectSuperContext";
+	select -r $srcVtxL;
+	polySelectConstraint -pp 3 -t 0x0001; // get selection's boundaries
+	select -add $ptpNode;
+	artAttrNComponentToolScript 4 strength;
+	artAttrCtx -e -sao "absolute" -opacity 1 -value 0.01 `currentCtx`;
+	artAttrCtx -e -clr `currentCtx`;
+	
+	setToolTo "selectSuperContext";
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh's vertices
+//
+//-------------------------------------------------------------------------
+//
+global proc auCs_getVtxSel()
+{
+	string $window 		= "win_AautoConstraint";
+	string $b_vtxSel	= ($window+"_vtxSel");
+	string $compSel[];
+	string $selList;
+	
+	
+	$compSel = `filterExpand -fullPath false -ex 0 -sm 31 (ls ("-sl"))`;
+	
+    if ( !`size($compSel)` )
+	{
+        error "Please select POLY VERTICES !";
+	}
+	
+	$selList = stringArrayToString($compSel, " ");
+	
+	textFieldButtonGrp -e -tx $selList $b_vtxSel;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh
+//
+//-------------------------------------------------------------------------
+//
+global proc auCs_getDriver()
+{
+	string $window 		= "win_AautoConstraint";
+	string $b_driver	= ($window+"_driver");
+	string $sel[];
+	
+	
+	$sel = `filterExpand -fullPath false -sm 12 (ls ("-sl"))`;
+	
+    if (!`size($sel)`)
+	{
+        error "Please select one POLYGONAL Object !";
+	}
+	
+	textFieldButtonGrp -e -tx $sel[0] $b_driver;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh's edges
+//
+//-------------------------------------------------------------------------
+//
+global proc auCs_getEdgSel1()
+{
+	string $window 		= "win_AautoConstraint";
+	string $b_edgSel1	= ($window+"_edgSel1");
+	string $compSel[];
+	string $selList;
+	
+	
+	$compSel = `filterExpand -fullPath false -ex 1 -sm 32 (ls ("-sl"))`;
+	
+    if ( `size($compSel)` != 2 )
+	{
+        error "Please select only 2 POLY EDGES !";
+	}
+	
+	$selList = stringArrayToString($compSel, " ");
+	
+	textFieldButtonGrp -e -tx $selList $b_edgSel1;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh's edges
+//
+//-------------------------------------------------------------------------
+//
+global proc auCs_getEdgSel2()
+{
+	string $window 		= "win_AautoConstraint";
+	string $b_edgSel2	= ($window+"_edgSel2");
+	string $compSel[];
+	string $selList;
+	
+	
+	$compSel = `filterExpand -fullPath false -ex 1 -sm 32 (ls ("-sl"))`;
+	
+    if ( `size($compSel)` != 2 )
+	{
+        error "Please select only 2 POLY EDGES !";
+	}
+	
+	$selList = stringArrayToString($compSel, " ");
+	
+	textFieldButtonGrp -e -tx $selList $b_edgSel2;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that LAUNCHES the script when hitting "CREATE" button
+//
+//-------------------------------------------------------------------------
+//
+global proc auCs_apply()
+{
+	string $window		= "win_AautoConstraint";
+	string $b_vtxSel	= ($window+"_vtxSel");
+	string $b_driver	= ($window+"_driver");
+	string $b_edgSel1	= ($window+"_edgSel1");
+	string $b_edgSel2	= ($window+"_edgSel2");
+	string $f_neutrFrm	= ($window+"_neutrFrm");
+	string $f_maxPosFrm= ($window+"_maxPosFrm");
+	string $f_maxStrVal= ($window+"_maxStrVal");
+	
+	string $vtxSel		= `textFieldButtonGrp -q -tx $b_vtxSel`;
+	string $driver		= `textFieldButtonGrp -q -tx $b_driver`;
+	string $edgSel1 	= `textFieldButtonGrp -q -tx $b_edgSel1`;
+	string $edgSel2 	= `textFieldButtonGrp -q -tx $b_edgSel2`;
+	int    $neutrFrm 	= `intFieldGrp -q -v1 $f_neutrFrm`;
+	int    $maxPosFrm 	= `intFieldGrp -q -v1 $f_maxPosFrm`;
+	float  $maxStrVal 	= `floatFieldGrp -q -v1 $f_maxStrVal`;
+	
+	string $tempArray[];
+	string $cmd;
+	
+	// -- Launch main proc
+	$tempArray = `stringToStringArray $vtxSel " "`;
+	$vtxSel    = `stringArrayToString $tempArray "\", \""`;
+	
+	$tempArray = `stringToStringArray $edgSel1 " "`;
+	$edgSel1   = `stringArrayToString $tempArray "\", \""`;
+	
+	$tempArray = `stringToStringArray $edgSel2 " "`;
+	$edgSel2   = `stringArrayToString $tempArray "\", \""`;
+	
+	$cmd = ( "A_autoConstraint( {\""+$vtxSel+"\"}, \""+$driver+"\", {\""+$edgSel1+"\"}, {\""+$edgSel2+"\"}, "+$neutrFrm+", "+$maxPosFrm+", "+$maxStrVal+" )" );
+	
+	print ("\/\/ CMD : " + $cmd + " \n");
+	eval($cmd);
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that calls the ABOUT window
+//
+//-------------------------------------------------------------------------
+//
+global proc AautoConstraintAbout(string $version)
+{
+	string $winAbout = "win_AautoConstraint_about";
+
+	windowPref -enableAll false;
+
+	if (`window -exists $winAbout`)
+		deleteUI -window $winAbout;
+
+	$winAbout =`window -title "About..."
+		-iconName "About win_AautoConstraint"
+		-toolbox true
+		-sizeable false
+		-widthHeight 300 300
+		-topEdge 256
+		-leftEdge 512
+		$winAbout`;
+
+	columnLayout -adjustableColumn true;
+
+		text -label "";
+		text -label " Script    : AautoConstraint" -align "left";
+		text -label (" Version : "+ $version) -align "left";
+		text -label " Creator : Ali" -align "left";
+		text -label " Contact : chibi_ali@homtail.com" -align "left";
+		text -label "";
+		text -label "";
+		text -label " Features : " -align "left";
+		text -label "";
+		text -label " Script that ..." -align "left";
+		text -label "";
+		text -label " - ..." -align "left";
+		text -label "";
+
+	windowPref -enableAll true;
+	showWindow $winAbout;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc AautoConstraint()
+{
+	string $version = "v1.0";
+	string $window = "win_AautoConstraint";
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		windowPref -remove $window;
+
+		$window = `window 	-title 		("Correc. Frame " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"AautoConstraint"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title 		("Correc. Frame " + $version)
+							-iconName 	"AautoConstraint"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	
+	
+
+	// -- Create a Form Layout to contain window's body
+	//
+	string $parentFrmLyt = `formLayout -numberOfDivisions 100 myFrmLyt`;
+	
+		// Create a Column Layout to contain the menu
+		//
+		string $parentCoLyt = `columnLayout -adjustableColumn true myCoLyt`;
+
+			// Create a menu for the window
+			//
+			string $menuBarLayout = `menuBarLayout`;
+			setParent ..;
+
+			//separator -height 10 -style "none";
+		
+		setParent ..;
+		
+		
+		// Body layout
+		//
+		//string $bodyLyt = `columnLayout -adjustableColumn true exCoLyt01`;
+		string $bodyLyt = `scrollLayout -w 420 -h 220 bodyLyt01`;
+		
+			// Fields
+			separator -height 10 -style "none";
+			
+			string $b_vtxSel = `textFieldButtonGrp
+								-l "nMesh Vertices"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "The nCloth's vertices that will be constrained"
+								-bc "auCs_getVtxSel"
+								($window+"_vtxSel")`;
+
+			separator -height 10 -style "none";
+			
+			string $b_driver = `textFieldButtonGrp
+								-l "Driver Mesh"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "The driver mesh that will constrain the nCloth's vertices (ie. the cloth2skin mesh)"
+								-bc "auCs_getDriver"
+								($window+"_driver")`;
+			
+			string $b_edgSel1 = `textFieldButtonGrp
+								-l "Collider Edges 1"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "Two edges of the nCloth Collider that will serve as rivet #1"
+								-bc "auCs_getEdgSel1"
+								($window+"_edgSel1")`;
+			
+			string $b_edgSel2 = `textFieldButtonGrp
+								-l "Collider Edges 2"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "Two edges of the nCloth Collider that will serve as rivet #2"
+								-bc "auCs_getEdgSel2"
+								($window+"_edgSel2")`;
+			
+			separator -height 10 -style "none";
+			
+			string $f_neutrFrm = `intFieldGrp
+								-l "Neutral Frame"
+								-cw 1 100
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-value1 (currentTime("-query"))
+								-ann "The frame when nCloth is at neutral pose"
+								($window+"_neutrFrm")`;
+			
+			string $f_maxPosFrm = `intFieldGrp
+								-l "Max Pose Frame"
+								-cw 1 100
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-value1 (currentTime("-query")+20)
+								-ann "The frame where nCloth should be fully constrained (where constraint is at max)"
+								($window+"_maxPosFrm")`;
+			
+			string $f_maxStrVal = `floatFieldGrp
+								-l "Max Strength"
+								-cw 1 100
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-value1 1.0
+								-ann "The constraint's maximum strength value"
+								($window+"_maxStrVal")`;
+		
+		setParent ..;
+		
+		
+		// Buttons
+		//
+		string $b_create = `button -label "Create" -w 150 -command "auCs_apply" ($window+"_create")`;
+		
+		string $b_close = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close")`;
+
+	setParent ..;
+	
+	
+	
+	// -- Edits the MAIN FORM layout
+	//
+	formLayout -edit
+		-attachForm     $parentCoLyt	"top"     0
+		-attachForm     $parentCoLyt	"left"    0
+		-attachForm     $parentCoLyt	"right"   0
+		
+		-attachControl  $bodyLyt		"top" 	  0 $parentCoLyt
+		-attachForm     $bodyLyt		"left"    5
+		-attachForm     $bodyLyt		"right"   5
+		-attachControl	 $bodyLyt		"bottom"  5 $b_create
+		
+		-attachNone		 $b_create    	"top" 	  
+		-attachForm     $b_create	    "left"    5
+		-attachPosition $b_create	    "right"   5 50
+		-attachForm     $b_create	    "bottom"  5
+		
+		-attachNone		 $b_close    	"top" 	  
+		-attachPosition $b_close	    "left"    5 50
+		-attachForm     $b_close	    "right"   5
+		-attachForm     $b_close	    "bottom"  5
+		
+	$parentFrmLyt;
+	
+	
+	// -- Edits the window's menu
+	//
+	setParent $menuBarLayout;
+		menu -label "Help" -helpMenu true;
+			menuItem -label "About..." -c ("AautoConstraintAbout \"" + $version + "\"") helpMit;
+	
+	
+	// -- Launch the window
+	//
+	showWindow $window;
+}

@@ -1,0 +1,754 @@
+//=============================================================================
+//
+//	FixeAnimation
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.31
+//
+// Created  :    28/06/2011
+// Modified :    27/07/2011
+//
+// Creator 	:    mv
+//
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "recenterInt()" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that create cluster mover and cluster fixer.
+//
+//		
+//
+//-------------------------------------------------------------------------
+
+
+
+global proc fixeAnimation()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+string $firstParent[];
+string $locaWorld[];
+string $cluster[];
+string $clusterLoc;
+string $locator;	
+string $addRemClusterFixe[];
+string $clusterFixer[];
+string $InveMatrix;
+string $groupeFixe;
+string $nameGroupeFixe = "FixeAnimation";
+string $clusterMover[];
+string $locatorperso;
+
+	/*
+	process
+	-----------------------------------------------------*/	
+
+$firstParent =`ls -sl`;
+
+if ( !`size($firstParent)` )
+
+    {
+    
+    warning "Selectionnez le TRAJ d'un perso" ;
+    
+    }
+else 
+
+    {
+    
+     if ( `objExists "LocatorPerso"` || `objExists "clusterFixerHandle"` || `objExists "clusterMoverHandle"` )
+
+    {
+    
+    warning "Fixe animation existe deja dans la scene!" ;
+    }
+    
+    else 
+    {  
+        //Creation d'un locator et constraint au perso
+        
+        $localWorld = `CreateLocator`;
+        $locator = `rename $localWorld "LocatorPerso"`;
+        
+        select -r $firstParent[0];
+        select -add $locator;
+        
+        doCreatePointConstraintArgList 1 { "0","0","0","0","0","0","0","1","","1" };
+        
+        //Creation d'un cluster a la base du perso
+        
+        select $firstParent;
+        
+        $clusterFixer =`cluster -is -n clusterFixer`;
+        
+        $pivOrig = `xform -q -ws -rp $firstParent[0]`;
+        $pivDest = `xform -q -wd -rp $clusterFixer[1]`;
+        xform -r -piv ($pivOrig[0]-$pivDest[0]) ($pivOrig[1]-$pivDest[1]) ($pivOrig[2]-$pivDest[2]) $clusterFixer[1];
+        
+        //// Connection du locator et du cluster sur un decompose Matrix
+        
+        $InveMatrix=`createNode decomposeMatrix`;
+        connectAttr ($locator+".worldInverseMatrix") ($InveMatrix + ".inputMatrix");
+        connectAttr ($InveMatrix + ".outputTranslate") ($clusterFixer[1] + ".translate");
+        
+        //// creation d'un groupe pour les elements de fixing
+        
+            if (`objExists $nameGroupeFixe`)
+    		{
+    		  $groupeFixe = $nameGroupeFixe;
+    		}
+    		else
+    		{
+    		    string $group = `group -em -name $nameGroupeFixe`;
+    		    $groupeFixe = $group;
+    		};            
+                parent $locator $groupeFixe;
+                parent $clusterFixer[1] $groupeFixe;
+            
+    	/*
+    	retours
+    	-----------------------------------------------------*/
+    //print ("ajoutez au cluster les elements a fixer \n");
+    
+    }
+  
+    select -clear;
+      
+    //$locatorperso = "LocatorPerso";
+    $clusterMover =`cluster -is -n clusterMover`;
+    pointConstraint -n "constraintmove" $locator $clusterMover[1];
+	
+	//// creation d'un groupe pour les elements de fixing
+	   
+	   if (`objExists $nameGroupeFixe`)
+		{
+		  $groupeFixe = $nameGroupeFixe;
+		}
+		else
+		{
+		    string $group = `group -em -name $nameGroupeFixe`;
+		    $groupeFixe = $group;
+		};            
+            parent $clusterMover[1] $groupeFixe;
+    }
+}
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that create geocache of All Hi CFX selected shapes.
+//
+//		
+//
+//-------------------------------------------------------------------------
+
+
+global proc geocacheFixe()
+
+{ 
+ string $selshape[]; 
+ string $curOut[];
+ string $sel[];
+        
+        
+   $sel =`ls -sl`;
+        
+        
+	    if ( !`size($sel)` ) 
+	    {
+			
+    	   warning ("nothing selected");
+		   
+	    }
+	    
+	    else
+	    { 
+	      
+	       $selshape = $sel;
+	    }
+	
+        string $folder =`recupfoldernameFixe($selshape [0])`;
+        string $outSel[] = Fixe_outMesh($sel);
+        
+        
+        for ($current in  $outSel)
+            {
+        
+            string $folder=`recupfoldernameFixe($current)`;
+    	    string $selectcache =`substitute ":" $current "_"`;
+    	    string $deletedcache = $selectcache + "ShapeCache*";
+    	
+            	if (`objExists ($deletedcache)`)
+            	    {
+            		
+            	    delete $deletedcache;
+            		 
+            		}
+            }
+            
+        select -r $outSel; 
+
+        
+        $cacheFile = `doCreateGeometryCache 5 { "2", "0", "1", "OneFile", "1",$folder,"1","","0", "export", "0", "1", "1","0","1","mcc" }`;
+ 
+		delete $outSel;
+		 
+
+		 
+		for ($curBDD in $selshape)
+		
+		{
+        	    
+        	    select $curBDD;
+        	    
+        	    $curOut = Fixe_outMesh(`ls -sl`);
+        	           	    
+				$bddObj = $curBDD;
+         		// ------------------------------------------------------------
+    	       // -- Duplicate the CFX:HiDef obj and connect it to the BDD:HiDef obj
+        		
+                string $cfxDupli[] =`A_dupliObjFixe {$curOut[0]} $bddObj`;
+                
+                //----------------------------------------------------------
+                // -- create cache node and attach cache files to duplicated shape
+                //        
+                
+                AttachCacheFixe $curOut[0] $cfxDupli[0];
+                
+                delete $curOut;
+                
+                addToClusterFixer $cfxDupli[0];
+                
+			}
+			
+			
+    }
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that creates an outMesh/Proxy for selected objects
+//		
+//		>> returns the created objects list
+//
+//-------------------------------------------------------------------------
+
+global proc string[] Fixe_outMesh(string $sel[])
+{
+	string $sel[];
+	string $curSel;
+	string $cleanName;
+	string $dupliPar;
+	string $dupliShp;
+	string $result[];;
+	
+	
+	// ------------------------------------------------------------
+	// -- Check selection
+	//
+	if ( !`size($sel)` ) {
+		error ("Please select at least one POLY as source !");
+	}
+		
+	// ------------------------------------------------------------
+	// -- Duplicate each selected object depending on it's type
+	//
+	for ($curSel in $sel)
+	{
+			
+		$namespace=  `match "^[^\:]*" $curSel`;
+		
+		$cleanName = `substitute "|" $curSel "_"`;
+		$cleanName = `substitute "^[^.]*:" $cleanName ""`;
+		$OutName = $namespace + "_" + $cleanName;
+		
+		$dupliPar = `createNode transform -n ($OutName + "_Fixe")`;
+		$dupliShp = `createNode mesh -p $dupliPar -n ($dupliPar + "Shape")`;
+		
+
+		// ------------------------------------------------------------
+		// -- Connect in/out plugs
+		//
+		
+		connectAttr -f ($curSel + ".outMesh") ($dupliPar + ".inMesh");
+
+		$result[size($result)] = $dupliPar;
+	}
+	
+	// ------------------------------------------------------------
+	// -- Return all resulting proxies
+	//
+	select -r $result;
+	return $result;
+}
+    
+    
+//-------------------------------------------------------------------------
+//
+// Procedure that recuperate folder name to create cache
+//
+//		>> returns the folder name
+//
+//-------------------------------------------------------------------------  
+global proc string recupfoldernameFixe(string $select)
+
+    { 
+    
+        string $fileName = `file -q -sceneName`;
+        string $DName=`match "[^/\\]*$" $fileName`;
+        string $DNamereduce=`match "^[^\.]*" $DName`;
+        string $DNameplan;
+        string $fileNameclean;
+        
+        if (`gmatch $DNamereduce ("*Split")`)
+            {            			
+            				
+                $DNameplan = `substitute "_Split" $DNamereduce ""`;
+                $fileNameclean = `substitute "_Split" $fileName ""`;		     
+            }
+         
+         else   
+             {
+         		$DNameplan = $DNamereduce;
+         		$fileNameclean = $fileName;
+         	  }	
+        
+        
+        string $component =match( "^.*/", $fileNameclean );
+        int $sz = size( $component );
+    
+      // Strip off trailing '/'
+      //
+          if ( ( $sz > 1 ) && ( substring( $component, $sz, $sz ) == "/" ) ) 
+	      {
+    	  $component = substring( $component, 1, ($sz - 1) );
+    	  }
+    
+    	string $cacheDirectory= $component + "_SyCache/" + $DNameplan + "_SyCache/";
+    	string $foldername = $cacheDirectory + "FixedAnimation";
+    	//print ($foldername + "\n") ;
+    	
+    	
+    	return $foldername;
+    
+    }
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that duplicates selected objects in their current state
+//		<< takes for arg a list of objects (poly, nurbs, subdiv)
+//
+//		>> returns the created objects list
+//
+//-------------------------------------------------------------------------
+
+
+        global proc string[] A_dupliObjFixe(string $sel[], string $bddobj)
+{
+	string $sel[];
+	string $filtSel[];
+	string $curSel;
+	string $tempSel[];
+	string $curPar;
+	string $curType;
+	string $cleanName;
+	string $cleanNameB;
+	string $dupliPar;
+	string $dupliShp;
+	string $outSourcePlug;
+	string $inDestPlug;
+	string $result[];
+	string $GroupeFixe;
+	string $nomDuGroupFixe = "FixedShapes";
+	string $setFixe = "Set_FixeAnimation";
+	string $SetFixeA;
+	
+	// ------------------------------------------------------------
+	// -- Check selection
+	//
+	if ( !`size($sel)` ) {
+		error ("Please select at least one POLY, NURBS or SUBDIV object as source !");
+	}
+	
+	// ------------------------------------------------------------
+	// -- Duplicate each selected object depending on it's type
+	//
+	
+	for ($curSel in $sel)
+	{
+
+		$existObj = $curSel + "d";
+		
+		if (!`objExists $existObj`)
+		  {
+
+		$dupliPar = `createNode transform -n ($curSel + "d")`;
+		$dupliShp = `createNode mesh -p $dupliPar -n ($dupliPar + "Shape")`;
+	
+		// ------------------------------------------------------------
+		// -- Connect in/out plugs
+		//
+
+	    	connectAttr -f ($curSel + ".outMesh") ($dupliPar + ".inMesh");
+	    	getAttr -silent ($dupliPar + ".outMesh"); // forces evaluation
+	    	disconnectAttr ($curSel + ".outMesh") ($dupliPar + ".inMesh");
+				
+	       	$result[size($result)] = $dupliPar;
+	       	
+        //----------------------------------------------------------
+        // -- Creation du groupe Hi et parentge des duplicatas
+        //
+        
+		if (`objExists $nomDuGroupFixe`)
+		{
+		  $GroupeFixe = $nomDuGroupFixe;
+		}
+		else
+		{
+		    string $group = `group -em -name $nomDuGroupFixe`;
+		    $GroupeFixe = $group;
+	
+		};
+            
+    
+            parent $result $GroupeFixe;
+            
+            
+        // ------------------------------------------------------------
+        // -- connect duplicate to the BDD:HiDef obj
+        // BlendShape a source duplicate to avoid namespace errors (if source is a Reference)
+      
+        string $history[] = `listHistory $bddobj` ; 
+       
+            for ($BCfx in $history)
+                {
+            
+                string $suffix = `match "blendShape_FIX_[0-9]+$" $BCfx`;   
+    
+                if  (!(size($suffix) == 0)) 
+                    {
+                     print ("Delete existing blendshape on " + $bddobj + "\n"); 
+                     delete $BCfx;
+                                 
+                    }
+                        
+                }
+            
+          
+            
+		if (!(size($result) == 0))
+    		{
+    		
+    		    $curCfxBS = `blendShape -n "blendShape_FIX_#" -before $result $bddobj`;
+    		    setAttr ($curCfxBS[0] + ".w[0]") 1;
+    		    
+    		    select -clear;
+    
+    		       		    
+            		   if (`objExists $setFixe`)
+        		            {
+        		              $SetFixeA = $setFixe;
+        		            }
+        		       else
+        		            {
+        		            string $createSetFixe = `sets -n $setFixe `;
+        		            $SetFixeA = $createSetFixe;
+        	
+        		            }; 
+        		  
+        		 
+    		    $addToSet = `sets -add $SetFixeA $curCfxBS[0]`;
+    		    
+    		}
+
+	    }
+		
+		else
+		{
+		
+    		print ($curSel + " a deja ete traite \n");
+    		
+    		$result[size($result)] = $existObj;
+
+		}
+  }
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all resulting duplicates
+	//
+	
+	select -r $result;
+	return $result;
+	
+	
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that delete cache present on shape
+//
+//		
+//
+//-------------------------------------------------------------------------
+
+global proc ClearCacheFixe(){
+
+    string $selnCache[]=`ls -sl`;
+    string $selrelatvie[]=`listRelatives -s -path $selnCache[0]`;
+    string $ncacheBlend[] = `listConnections -t historySwitch $selrelatvie[0]`;
+    string $shorterBlend[] = stringArrayRemoveDuplicates($ncacheBlend);
+    
+    if(size($shorterBlend)>0)
+      {
+      select -r $shorterBlend;
+      delete;
+      }
+      
+    string $ncache[] = `listConnections -t cacheFile $selrelatvie[0]`;
+    string $shorterCache[] = stringArrayRemoveDuplicates($ncache);
+
+    if(`objExists $shorterCache[0]`== 1)
+      {
+      select $selnCache[0];    
+      deleteCacheFile 3 { "keep", "", "nCloth" };
+
+      }
+}
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that that add duplicate shape to cluster fixer
+//
+//		>> returns the folder name
+//
+//-------------------------------------------------------------------------
+
+global proc addToClusterFixer(string $curBDD)
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	string $addRemClusterFixe[];
+	string $clusterFixeSet[];
+	string $AddToClusterMove;
+	string $selCluster;
+	/*
+	process
+	-----------------------------------------------------*/	
+    $selCluster = "clusterFixer";
+    //$addRemClusterFixe =`ls -sl`;
+    $clusterFixeSet = `listConnections -type objectSet  $selCluster`;
+    $AddToClusterMove = `sets -add $clusterFixeSet $curBDD`;
+	/*
+	retours
+	-----------------------------------------------------*/
+	//print ("objets rajoute au cluster " + $selCluster +":" + "\n");
+	//print $addRemClusterFixe;
+	
+}
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that assign cache to Duplicated Shape
+//
+//	
+//
+//-------------------------------------------------------------------------
+
+global proc AttachCacheFixe(string $curBDD, string $cfxDupli)
+            
+            { 
+            
+            
+  string $shapes[];
+  int $shapenum; 
+  int $lastshape;
+  string $cleanshapeA;
+  string $cleanshapeB;
+  string $cleanshapeC;
+  string $folder; 
+  string $xmlName;
+  string $checkNumber[]; 
+  string $shapeToClean;
+  string $shapesDupli[];
+  string $namespace; 
+  string $cacheNameFull;      
+            
+             
+                    
+            $cacheNameFull = $curBDD + "Shape";
+            
+            $shapesDupli = `listRelatives -s -ni -path $cfxDupli`; 
+                       
+            ClearCacheFixe;
+
+            $folder=`recupfoldernameFixe $curBDD`;
+            
+            $xmlName = $folder + "/"+ $cacheNameFull + ".xml";  
+           
+            
+            //print ("xmlName est " + $xmlName +"/n");
+            
+            $checkNumber = `getFileList -fs ($xmlName)`;
+
+            //$checkNumber = `getFileList -fs ($folder + $cacheNameFull + ".xml")`;
+        
+            if (size($checkNumber))
+                {
+                string $channels[] = `cacheFile -fileName ($xmlName) -q -channelName`;
+    	        string $switch = createHistorySwitch($shapesDupli[0],false);
+    	        string $cacheNode = `cacheFile -attachFile -f ($xmlName) -cnm $channels[0] -ia ($switch+".inp[0]")`;
+    
+                connectAttr -f ($cacheNode+".inRange") ($switch +".playFromCache");
+                }
+                
+            else
+                {
+                warning ("Il n'existe aucun cache pour " + $curBDD + "\n");
+                }    
+    	    }
+
+     global proc addToClusterMover()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	string $addRemClusterMove[];
+	string $clusterMoveSet[];
+	string $AddToClusterMove;
+	string $selCluster;
+	/*
+	process
+	-----------------------------------------------------*/	
+    $selCluster = "clusterMover";
+    $addRemClusterMove =`ls -sl`;
+    $clusterMoveSet = `listConnections -type objectSet  $selCluster`;
+    $addToClusterMove = `sets -add  $clusterMoveSet $addRemClusterMove`;
+    
+    select Set_FixeAnimation;
+    string $setFixeA[] = `ls -sl`;
+    
+    for ($setmembers in $setFixeA)
+                {
+            
+                setAttr ($setmembers + ".w[0]") 0;   
+         
+                 }
+ 
+       
+	/*
+	retours
+	-----------------------------------------------------*/
+	print ("objets rajoute au cluster " + $selCluster +":" + "\n");
+	print $addRemClusterMove;
+	
+}
+
+global proc remFromClusterMover()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	string $addRemClusterMove[];
+	string $clusterMoveSet[];
+	string $AddToClusterMove;
+	string $selCluster;
+	/*
+	process
+	-----------------------------------------------------*/	
+    $selCluster = "clusterMover";
+    $addRemClusterMove =`ls -sl`;
+    $clusterMoveSet = `listConnections -type objectSet  $selCluster`;
+    $remFromClusterMove = `sets -rm  $clusterMoveSet $addRemClusterMove`;
+	/*
+	retours
+	-----------------------------------------------------*/
+	print ("objets retire du cluster " + $selCluster +":" + "\n");
+	print $addRemClusterMove;
+	
+}
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//----------------------	    UserInterface			-----------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+global proc recenterInt()
+  {
+    string $wndName = "Fixer";
+    string $version = "_v1.31";
+
+    if (`window -exists recenter`) deleteUI recenter;
+    if (`windowPref -exists recenter`) windowPref -remove recenter;
+   
+    window -title ($wndName  + $version) -widthHeight 200 220 -s false recenter;
+    
+    string $form = `formLayout -numberOfDivisions 100`;
+     
+         string $b1  = `button -label "Create Clusters" -w 200 -command "fixeAnimation()"`;
+         string $b2A = `button -label "Fixe Geometry" -command "geocacheFixe()"`;       
+         string $b4A = `button -label "start Move Again" -command "addToClusterMover()"`;
+         string $b4B = `button -label "stop Move Again" -command "remFromClusterMover()"`;
+         
+         formLayout -edit
+    		-attachForm     $b1     "top"    5
+    		-attachForm     $b1     "left"   10
+    		-attachNone     $b1     "bottom" 
+    		-attachForm     $b1     "right"  10
+
+    		-attachControl  $b2A     "top"    5 $b1
+    		-attachForm     $b2A     "left"   10 
+    		-attachNone     $b2A     "bottom"
+    		-attachForm     $b2A      "right"   10
+    	
+    		-attachControl  $b4A     "top"    5 $b2A
+    		-attachForm     $b4A     "left"   15
+    		-attachForm     $b4A     "bottom" 5 
+    		-attachPosition $b4A     "right"  10 50
+    		
+    		-attachControl  $b4B     "top"    5 $b2A
+    		-attachControl  $b4B     "left"   25 $b4A
+    		-attachForm     $b4B     "bottom" 5 
+    		-attachForm     $b4B     "right"  15 
+
+
+    		
+    		$form;
+    		
+    showWindow recenter; 
+
+  };

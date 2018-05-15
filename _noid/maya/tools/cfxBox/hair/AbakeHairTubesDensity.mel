@@ -1,0 +1,644 @@
+//=============================================================================
+//
+//	Bake HairTubes Density	- Script that gets densityRatio from selected hairTUBES and bakes it into EMITTER's UVs
+//							- Computes the Ratio between a TUBE's base and it's largest section
+//							- Remaps the Ratio between a min/max range
+//							- Match each TUBE with an EMITTER
+//							- Bakes the Ratio into the vertex color of each EMITTER
+//							- Bakes those values into a map (based on EMITTER's UVs)
+//
+//							>> See script "bl_extractGuidesAndEmitter.mel" for EMITTER's creation
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.1
+//
+// Created  :    04/08/2010
+// Modified :    09/08/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AbakeHairTubesDensity" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that gets hairTUBES densityRatio and bakes it into EMITTER's UVs
+//		<< takes for arg a list of Nurbs TUBES
+//		<< takes for arg the poly EMITTER (the densityRatio will be baked into its vtxColor)
+//		<< takes for arg a new minimum value (where lowest ratio will be remapped)
+//		<< takes for arg a new maximum value (where highest ratio will be remapped)
+//		<< takes for arg the path and file name of the texture to be baked
+//		<< takes for arg the texture's resolution
+//		<< takes for arg a boolean to activate verbosity
+//
+//-------------------------------------------------------------------------
+
+global proc A_bakeHairTubesDensity(string $sel[], string $emitter, float $minRange, float $maxRange, string $filePath, int $resol, int $check)
+{
+	string $tempArray[];
+	string $texWinName[];
+	string $curveList[];
+	float  $curvArcLenU0;
+	float  $curvArcLen;
+	float  $curvLongestLen;
+	float  $curvRatio;
+	float  $curvRatioList[];
+	float  $maxRatio;
+	float  $minRatio;
+	float  $ratioList[];
+	float  $curNewRatio;
+	
+	string $initSelL;
+	string $initSel[];
+	string $emitterPXY;
+	string $emitterOrder[];
+	string $newEmitterOrder[];
+	string $initSelMatch;
+	string $emitterMatch;
+	string $clrVtxCtx;
+	
+	
+	// -- Get all nurbsSurfaces from selection or hierachy
+	//
+	$sel = `filterExpand -fullPath false -sm 10 $sel`;
+	$sel = `ls -visible $sel`;
+	
+    if (`size($sel)` < 2)
+	{
+        error "Please select at least 2 visible NURBS surfaces !";
+	}
+	
+	
+	// -- Check that $emitter is a poly and has a "combineOrder" extraAttr
+	//
+	if ($emitter == "")
+	{
+		error ("Please give an \"Emitter\" !");
+	}
+	
+	$tempArray = `filterExpand -fullPath false -sm 12 $emitter`;
+	
+	if (!`size($tempArray)`)
+	{
+		error ("The \"Emitter\" must be a POLYGONAL object !");
+	}
+	
+	$emitter = $tempArray[0]; // get the transform even if $emitter was a shape
+	
+	if (!`attributeExists "combineOrder" $emitter`)
+	{
+		error ("The \"Emitter\" must have a \"combineOrder\" extra attribute !");
+	}
+	
+	
+	// -- Close UVTexture Editor if open (really really faster!)
+	//
+	$texWinName = `getPanel -sty polyTexturePlacementPanel`;
+	// disable it if it's in embedded in a layout (like perspView)
+	removeTextureWindow $texWinName[0];
+	
+	// close it if it's a separate window
+	if ( `window -exists polyTexturePlacementPanel1Window` ) {
+		deleteUI -window polyTexturePlacementPanel1Window;
+	}
+	
+	
+	// -- Get a ratio btw the longest U isoparm and the first U isoparm for each Nurbs TUBE
+	//
+	for ($curSel in $sel)
+	{
+		// Add all U isoparms in $curveList
+		clear $curveList;
+		selectVisibleIsoparms {$curSel} $curveList 0 0 1;
+		
+		// Get the length of the first U isoparm
+		$curvArcLenU0 = `arclen -ch 0 $curveList[0]`;
+		
+		// Get the length of the longest U isoparm
+		$curvLongestLen = 0;
+		
+		for ($i=0; $i<size($curveList); $i++)
+		{
+			$curvArcLen = `arclen -ch 0 $curveList[$i]`;
+			$curvLongestLen = `max $curvLongestLen $curvArcLen`;
+		}
+		
+		// Get the ratio
+		$curvRatio = $curvLongestLen / $curvArcLenU0;
+		$curvRatioList[size($curvRatioList)] = $curvRatio;
+		
+		// Verbose depending on $check option
+		if ($check)
+		{
+			print ("\/\/ current object : " + $curSel + "\n");
+			print ("\/\/ first isoU length : " + $curvArcLenU0 + " | longest isoU : " + $curvLongestLen +"\n");
+			print ("\/\/ isoU ratio : " + $curvRatio +"\n");
+			print ("\/\/ -----------------------------------------\n");
+		}
+	}
+	
+	
+	// -- Get the lowest and the highest Ratios of the list
+	//
+	$minRatio = $curvRatioList[0];
+	$maxRatio = $curvRatioList[0];
+	
+	for ($curRatio in $curvRatioList)
+	{
+		$maxRatio = `max $maxRatio $curRatio`;
+		$minRatio = `min $minRatio $curRatio`;
+	}
+	
+	
+	// -- Verbose depending on $check option
+	//
+	if ($check)
+	{
+		print ("\/\/ -----------------------------------------\n");
+		print ("\/\/ min Ratio : " + $minRatio + " | max Ratio : " + $maxRatio +"\n");
+		print ("\/\/ -----------------------------------------\n");
+		print ("\/\/ -----------------------------------------\n");
+	}
+	
+	
+	// -- Remap lowestRatio >> $minRange and highestRatio >> $maxRange
+	//    and get each Ratio's new value
+	//
+	for ($curRatio in $curvRatioList)
+	{
+		// Do the remap between 0 and 1
+		$curNewRatio = ($curRatio-$minRatio)/($maxRatio-$minRatio);
+		
+		// Now do the remap between $minRange and $maxRange
+		$curNewRatio = $minRange + ( $curNewRatio * ($maxRange-$minRange) );
+		
+		// Verbose depending on $check option
+		if ($check)
+		{
+			print ("\/\/ Current Ratio : " + $curRatio + " | Remapped to : " + $curNewRatio +"\n");
+		}
+		
+		$ratioList[size($ratioList)] = $curNewRatio;
+	}
+	
+	
+	// -- Get the list and order of the inital TUBES' selection (the tubes that generated the emitter)
+	//
+	$initSelL = `getAttr ($emitter + ".combineOrder")`;
+	$initSel  = stringToStringArray($initSelL, " ");
+	
+	
+	// -- Create a proxy of the EMITTER and separate it
+	//
+	$emitterPXY = `createNode transform -n ($emitter + "_PXY")`;
+	createNode mesh -p $emitterPXY -n ($emitter + "_PXYShape");
+	sets -e -forceElement initialShadingGroup $emitterPXY;
+	connectAttr -f ($emitter + ".outMesh") ($emitterPXY + ".inMesh");
+	
+	$emitterOrder = `polySeparate -ch 0 $emitterPXY`;
+	
+	
+	// -- Match each Ratio with an emmiter (because ratios order and emitters comb order can be different)
+	//    >> ratios order == current tubes selection order ($ratioList == $sel)
+	//    >> emitters order == tubes order at emitter's creation ($emitterOrder == $initSel)
+	//
+	for ($i=0; $i<size($sel); $i++)
+	{
+		$initSelMatch = "";
+		$emitterMatch = "";
+		
+		// List all initial tubes order and match with the current selected tube
+		for ($j=0; $j<size($initSel); $j++)
+		{
+			if (`gmatch $sel[$i] $initSel[$j]`) // the "initSel" matching the current selection
+			{
+				$initSelMatch = $initSel[$j];
+				$emitterMatch = $emitterOrder[$j]; // the emmiter matching this "initSel"
+				break;
+			}
+		}
+		
+		// Verbose depending on $check option
+		if ($check)
+		{
+			print ("\/\/ -----------------------------------------\n");
+			print ("\/\/ Current Sel.  : " + $sel[$i] + " | Ratio : " + $ratioList[$i] +"\n");
+			print ("\/\/ Matching Tube : " + $initSelMatch + " | Emitter : " + $emitterMatch +"\n");
+		}
+		
+		$newEmitterOrder[size($newEmitterOrder)] = $emitterMatch;
+	}
+	
+	
+	// -- Bake the values into the vertex color of the EMITTER
+	//
+	$newEmitterOrder = stringArrayRemoveDuplicates($newEmitterOrder);
+	
+	for ($i=0; $i<size($sel); $i++)
+	{
+		polyColorPerVertex -colorRGB $ratioList[$i] $ratioList[$i] $ratioList[$i] -colorDisplayOption -rpt 2 ($newEmitterOrder[$i] + ".vtx[*]");
+	}
+	
+	// Re-Combine the separated PXY EMITTER and transfert vtxColors to the EMITTER
+	$tempArray = `polyUnite -ch 0 $emitterOrder`;
+	$emitterPXY = $tempArray[0];
+	
+	transferAttributes -pos 0 -nml 0 -uvs 0 -col 2 -sampleSpace 0 -searchMethod 3 -colorBorders 1 $emitterPXY $emitter;
+	delete -ch $emitter;
+	delete $emitterPXY;
+	
+	
+	// -- Bakes the same values in a texture only if user gave a $filePath
+	//
+	if ($filePath != "")
+	{
+		// Poly color per vertex Paint Tool
+		$clrVtxCtx = "artAttrColorPerVertexContext";
+		
+		// Create the context if it doesn't already exists
+		if (!`contextInfo -ex $clrVtxCtx`)
+		{
+			//artAttrTool -q; // query the list of built-in tools
+			
+			// create a new context via artAttrCtx and specify the tool name via the -whichTool flag
+			artAttrPaintVertexCtx -whichTool "colorPerVertex" -i1 "paintVertexColour.png" $clrVtxCtx;
+		}
+		
+		select -r $emitter;
+		setToolTo $clrVtxCtx;
+		
+		// Set the export options for the current tool type (colorPerVertex)
+		artAttrPaintVertexCtx -e -efm "rgb" -eft "IFF" -fsx $resol -fsy $resol `currentCtx`;
+		
+		// Export the map (the options are set before in order or else they won't be taken into account !!)
+		artAttrPaintVertexCtx -e -exportfilesave $filePath `currentCtx`;
+		
+		setToolTo "selectSuperContext";
+	}
+	else
+	{
+		select -r $emitter;
+		warning ("No map was generated as no filePath was given ! The densityRatio was only baked into the EMITTER's vertexColor Attributes.");
+	}
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh
+//
+//-------------------------------------------------------------------------
+//
+global proc bHTD_getRefMesh()
+{
+	string $window 		= "win_AbakeHairTubesDensity";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $sel[];
+	
+	
+	$sel = `filterExpand -fullPath false -sm 12 (ls ("-sl"))`;
+	
+    if (!`size($sel)`)
+	{
+        error "Please select one POLYGONAL Object !";
+	}
+	
+	textFieldButtonGrp -e -tx $sel[0] $b_refMesh;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that GETS the files' path
+//
+//-------------------------------------------------------------------------
+//
+global proc bHTD_getFilePath()
+{
+	string $window 			= "win_AbakeHairTubesDensity";
+	string $b_filePath 	= ($window+"_filePath");
+	string $filename[];
+	
+	
+	string $filename[] = `fileDialog2 -fileMode 0 -dialogStyle 2`;
+	
+	textFieldButtonGrp -e -tx $filename $b_filePath;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that LAUNCHES the script when hitting "CREATE" button
+//
+//-------------------------------------------------------------------------
+//
+global proc bHTD_apply()
+{
+	string $window		= "win_AbakeHairTubesDensity";
+	string $b_refMesh	= ($window+"_refMesh");
+	string $b_minR		= ($window+"_minR");
+	string $b_maxR		= ($window+"_maxR");
+	string $b_filePath = ($window+"_filePath");
+	string $b_resol		= ($window+"_resol");
+	string $c_verb		= ($window+"_verb");
+	
+	string $refMesh 	= `textFieldButtonGrp -q -tx $b_refMesh`;
+	float  $minR	 	= `floatFieldGrp -q -v1 $b_minR`;
+	float  $maxR	 	= `floatFieldGrp -q -v1 $b_maxR`;
+	string $filePath	= `textFieldButtonGrp -q -tx $b_filePath`;
+	int    $resol		= `intFieldGrp -q -v1 $b_resol`;
+	int    $check		= `checkBoxGrp -q -v1 $c_verb`;
+	
+	string $sel[];
+	
+	
+	// -- Launch main proc
+	//
+	$sel = `ls -sl`;
+	
+	print ("\/\/ CMD : A_bakeHairTubesDensity ({\"FirstSelection\", \"SecondSelection\", ...}, \"" + $refMesh + "\", " + $minR + ", " + $maxR + ", \"" + $filePath + "\", " + $resol + ", " + $check + ") \n");
+	
+	// Turn Off undos temporarly in order to avoid undoing this proc (because it crashes maya...)
+	undoInfo -stateWithoutFlush off;
+	
+	A_bakeHairTubesDensity($sel, $refMesh, $minR, $maxR, $filePath, $resol, $check);
+	undoInfo -stateWithoutFlush on;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that calls the ABOUT window
+//
+//-------------------------------------------------------------------------
+//
+global proc AbakeHairTubesDensityAbout(string $version)
+{
+	string $winAbout = "win_AbakeHairTubesDensity_about";
+
+	windowPref -enableAll false;
+
+	if (`window -exists $winAbout`)
+		deleteUI -window $winAbout;
+
+	$winAbout =`window -title "About..."
+		-iconName "About win_AbakeHairTubesDensity"
+		-toolbox true
+		-sizeable false
+		-widthHeight 300 300
+		-topEdge 256
+		-leftEdge 512
+		$winAbout`;
+
+	columnLayout -adjustableColumn true;
+
+		text -label "";
+		text -label " Script    : AbakeHairTubesDensity" -align "left";
+		text -label (" Version : "+ $version) -align "left";
+		text -label " Creator : Ali" -align "left";
+		text -label " Contact : chibi_ali@homtail.com" -align "left";
+		text -label "";
+		text -label "";
+		text -label " Features : " -align "left";
+		text -label "";
+		text -label " Gets selected hairTUBES densityRatios and bakes them into EMITTER's UVs" -align "left";
+		text -label "";
+		text -label " - Computes the Ratio between a selected TUBE's base and it's largest section" -align "left";
+		text -label " - Remaps the Ratio between the min/max range" -align "left";
+		text -label " - Match each TUBE with an EMITTER" -align "left";
+		text -label " - Bakes the Ratio into the vertex color of each EMITTER" -align "left";
+		text -label " - Bakes those values into a map if a path is provided (based on EMITTER's UVs) " -align "left";
+		text -label "";
+		text -label " >> See script \"bl_extractGuidesAndEmitter.mel\" for EMITTER's creation" -align "left";
+		text -label "";
+
+	windowPref -enableAll true;
+	showWindow $winAbout;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc AbakeHairTubesDensity()
+{
+	string $version = "v1.1";
+	string $window = "win_AbakeHairTubesDensity";
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		windowPref -remove $window;
+
+		$window = `window 	-title 		("Bake HairTubes Density " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"AbakeHairTubesDensity"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title 		("Bake HairTubes Density " + $version)
+							-iconName 	"AbakeHairTubesDensity"
+							-width 		430
+							-height 	230
+							-sizeable	true
+							$window`;
+	}
+	
+	
+
+	// -- Create a Form Layout to contain window's body
+	//
+	string $parentFrmLyt = `formLayout -numberOfDivisions 100 myFrmLyt`;
+	
+		// Create a Column Layout to contain the menu
+		//
+		string $parentCoLyt = `columnLayout -adjustableColumn true myCoLyt`;
+
+			// Create a menu for the window
+			//
+			string $menuBarLayout = `menuBarLayout`;
+			setParent ..;
+
+			//separator -height 10 -style "none";
+		
+		setParent ..;
+		
+		
+		// Body layout
+		//
+		//string $bodyLyt = `columnLayout -adjustableColumn true exCoLyt01`;
+		string $bodyLyt = `scrollLayout -w 420 -h 200 bodyLyt01`;
+		
+			// Fields
+			separator -height 10 -style "none";
+			
+			string $b_refMesh = `textFieldButtonGrp
+								-l "Emitter Mesh"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "the poly EMITTER (the densityRatio will be baked into its vtxColor)"
+								-bc "bHTD_getRefMesh"
+								($window+"_refMesh")`;
+
+			separator -height 10 -style "none";
+			
+			string $b_minR    = `floatFieldGrp
+								-l "Min Range"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-v1 0.1
+								-ann "The minimum value (where lowest ratio will be remapped)"
+								($window+"_minR")`;
+			
+			string $b_maxR    = `floatFieldGrp
+								-l "Max Range"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-v1 0.9
+								-ann "The maximum value (where highest ratio will be remapped)"
+								($window+"_maxR")`;
+			
+			separator -height 10 -style "none";
+			
+			string $b_filePath = `textFieldButtonGrp
+								-l "Map Path"
+								-ed 1
+								-bl " Browse "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-bc "bHTD_getFilePath"
+								-ann "The path and file name of the texture to be baked (BAKE IGNORED if path is empty)"
+								($window+"_filePath")`;
+			
+			string $b_resol  = `intFieldGrp
+								-l "Map Resolution"
+								-cw 1 100
+								-cw 2 85
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-v1 2048
+								-ann "The texture's resolution"
+								($window+"_resol")`;
+		   
+		   separator -height 10 -style "none";
+		   
+		   string $c_verb    = `checkBoxGrp
+								-l1 "Verbose Mode"
+								-v1 false
+								-columnAttach 1 "left" 87
+								-ann "Activate verbosity messages for checking"
+								($window+"_verb")`;
+		setParent ..;
+		
+		
+		// Buttons
+		//
+		string $b_create = `button -label "Create" -w 150 -command "bHTD_apply" ($window+"_create")`;
+		
+		string $b_close = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close")`;
+
+	setParent ..;
+	
+	
+	
+	// -- Edits the MAIN FORM layout
+	//
+	formLayout -edit
+		-attachForm     $parentCoLyt	"top"     0
+		-attachForm     $parentCoLyt	"left"    0
+		-attachForm     $parentCoLyt	"right"   0
+		
+		-attachControl  $bodyLyt		"top" 	  0 $parentCoLyt
+		-attachForm     $bodyLyt		"left"    5
+		-attachForm     $bodyLyt		"right"   5
+		-attachControl	 $bodyLyt		"bottom"  5 $b_create
+		
+		-attachNone		 $b_create    	"top" 	  
+		-attachForm     $b_create	    "left"    5
+		-attachPosition $b_create	    "right"   5 50
+		-attachForm     $b_create	    "bottom"  5
+		
+		-attachNone		 $b_close    	"top" 	  
+		-attachPosition $b_close	    "left"    5 50
+		-attachForm     $b_close	    "right"   5
+		-attachForm     $b_close	    "bottom"  5
+		
+	$parentFrmLyt;
+	
+	
+	// -- Edits the window's menu
+	//
+	setParent $menuBarLayout;
+		menu -label "Help" -helpMenu true;
+			menuItem -label "About..." -c ("AbakeHairTubesDensityAbout \"" + $version + "\"") helpMit;
+	
+	
+	// -- Launch the window
+	//
+	showWindow $window;
+}
+

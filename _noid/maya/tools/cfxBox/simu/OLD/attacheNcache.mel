@@ -1,0 +1,148 @@
+//=============================================================================
+//
+//	attache ncache			
+//							
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1
+//
+// Created  :    21/10/2010
+// Modified :    22/10/2010
+//
+// Creator 	:    uu
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "attachCache" to launch the script
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+global proc attachCache()
+{
+string $result[];
+    string $currentsel[]=`ls -sl`;
+    string $fileName = `file -q -sceneName`;
+    string $DName=`match "[^/\\]*$" $fileName`;
+    string $DNamereduce=`match "^[^\.]*" $DName`;
+    string $component =match( "^.*/", $fileName );
+    int $sz = size( $component );
+
+  // Strip off trailing '/'
+  //
+      if ( ( $sz > 1 ) && ( substring( $component, $sz, $sz ) == "/" ) ) 
+	  {
+		  $component = substring( $component, 1, ($sz - 1) );
+	  }
+
+	string $cacheDirectory= $component + "_SyCache/" + $DNamereduce + "_SyCache/";
+	int $checkFiles=`filetest -d $cacheDirectory`;
+	
+	if($checkFiles==0)
+	{
+		error "wrong folder";
+	}
+		
+	string $cacheName= $currentsel[0];	  
+	string $foldername = `substitute ":[^:]*$" $cacheName ""`;
+	string $foldercache = $cacheDirectory + $foldername ; 			
+	string $shapes[] = `listRelatives -s -path $currentsel`;
+	string $Nucfolder[]=`listConnections -d off -s on -t nucleus $shapes[0]`;
+	string $shortCacheName = `match "[^:]*$"  $Nucfolder[0]`;
+	string $cachePath = $foldercache + "/" + $shortCacheName; 
+	int $checkFolder =`filetest -d $cachePath`;	    
+    string $basicFilter = "*.xml";
+
+		if($checkFolder==1)
+		{
+			$result = `fileDialog2 -dir $cachePath -fileFilter $basicFilter -fileMode 1 -dialogStyle 2 -cap "open"`;
+		}
+		
+		else
+		{
+			$result = `fileDialog2 -dir $cacheDirectory -fileFilter $basicFilter -fileMode 1 -dialogStyle 2 -cap "open"`;
+		}
+		
+		if(size($result)>0)
+		{
+				string $cacheSel = `match "[^/\\]*$" $result[0]`;
+				string $cachelight=`match "^[^\.]*" $cacheSel`;
+
+				//create cache node and attach cache files
+				ClearCache;
+
+				string $channels[] = `cacheFile -fileName $result -q -channelName`;
+						
+					if (`size($shapes)`!=`size($channels)`)
+							
+					{
+						error "select the same Ncloth than channels present in cachefile";
+					}
+						
+					else
+					{							
+						for ($i = 0 ; $i <`size($channels)` ; $i++)
+						{
+							string $inputPointsAttr=$shapes[$i]+".positions";
+							string $attachCmd = ( "cacheFile -attachFile -fileName \"" + $result[0] + "\"" );
+							$attachCmd += (" -ia "+$inputPointsAttr);
+							$attachCmd += (" -channelName "+$channels[$i]);
+							string $cacheFile = `eval $attachCmd`;
+							connectAttr ($cacheFile+".inRange") ($shapes[$i]+".playFromCache");																										
+						}										
+					}
+			}
+			
+            else
+			{
+					print "no Cache select";				
+			}		
+}
+
+
+
+
+global proc ClearCache()
+{
+
+	 string  $selnCache[]=`ls -sl`;
+	 string $selrelatvie[]=`listRelatives -s -path $selnCache[0]`;		
+    string $ncacheBlend[] = `listConnections -t cacheBlend $selrelatvie[0]`;
+    string $shorterBlend[] = stringArrayRemoveDuplicates($ncacheBlend);
+	
+    if(size($shorterBlend)>0)
+	{
+		select -r $shorterBlend;
+	   delete;
+    }
+	
+	string $ncache[] = `listConnections -t cacheFile $selrelatvie[0]`;
+	string $shorterCache[] = stringArrayRemoveDuplicates($ncache);
+
+	    if(`objExists $shorterCache[0]`== 1)
+		{
+			select $selnCache[0];
+			
+			deleteCacheFile 3 { "keep", "", "nCloth" };
+
+		}
+ }
+
+

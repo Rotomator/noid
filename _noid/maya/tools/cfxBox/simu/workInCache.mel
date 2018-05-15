@@ -1,0 +1,250 @@
+
+
+// -- Procedure that reassign or create caches on duplicated shapes of the selected shapes
+// -- workInCache.png
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+global proc RcleanMesh()
+	{
+	string $sel[];
+	string $tempSel[];
+	string $curPar;
+	string $grdPar;
+	string $proxyPar;
+	string $proxyShp;
+	string $result[];
+	
+	
+	$sel = `filterExpand -fullPath true -sm 12 (ls ("-sl"))`;
+	$sel = `ls -visible $sel`;
+	
+	for ($curSel in $sel)
+		{
+		$tempSel  = `listRelatives -p -pa $curSel`;
+		$curPar   = $tempSel[0];
+		
+		delete -ch $curPar;
+		$tempSel = `listRelatives -p -pa $curPar`;
+		$grdPar	= $tempSel[0];
+		
+		if ($grdPar == "")
+			{
+			$proxyPar = `createNode transform -n ($curPar + "_PXY")`;
+			}
+		else
+			{
+			$proxyPar = `createNode transform -parent $grdPar -n ($curPar + "_PXY")`;
+			}
+		
+		$proxyShp = `createNode mesh -n ($proxyPar+"Shape") -p $proxyPar`;
+		
+		connectAttr -f ($curSel + ".outMesh") ($proxyShp + ".inMesh");
+		//sets -e -forceElement initialShadingGroup $proxyPar;
+		ART_transferObjShading( $curSel, $proxyShp );
+		$result = `duplicate -n ($curPar + "_PXYD") $proxyPar`;
+		
+		delete $curPar;
+		delete $proxyPar;
+		rename $result $curPar;
+		}
+	}
+
+
+global proc workInCache()
+{
+
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+string $sel[] = `ls-sl`;
+string $tempSel[];
+string $curPar;
+string $curType;
+string $cleanName;
+string $dupli[];
+string $dupliShp;
+string $outSourcePlug;
+string $inDestPlug;
+string $result[];
+
+string $cacheTmpDir;
+string $cacheAttachCmd;
+
+string $isolateSel[];
+	
+
+	
+	/*
+	process
+	-----------------------------------------------------*/	
+for($i=0; $i<size($sel); $i++)
+	{
+	
+		// -- Check selection
+	
+		if ( !`size($sel)` )
+			{
+			error ("Please select a poly mesh object as source !");
+			}
+		
+		$filtSel = `filterExpand -fullPath true -sm 12 $sel[$i]`;
+		
+		if (!size($filtSel))
+			{
+				error ("Please select at least one POLY, NURBS or SUBDIV object as source !");
+			}	    
+	
+		// -- duplicate process /Create the new object
+	
+		string $selShape[] = `listRelatives -s $sel[$i]`;
+		$curType  = `nodeType $selShape[0]`;
+	
+		   
+		// -- duplicate process / Remove any existing nameSpace and pipes
+	
+		string $duplicat[] = `duplicate -rc -n {"DUPLI_TMP"} -rr $sel[$i]`;
+		select -r DUPLI_TMP;
+		RcleanMesh;
+		
+		string $duplicatShape[] = `listRelatives -s -ni $duplicat[0]`;
+		$dupli[0] = `createNode transform -n ($sel[$i]+"GEO")`;
+		$dupliShp = `createNode $curType -p $dupli[0] -n ($dupli[0] + "Shape")`;
+		   
+		// -- duplicate process /Connect in/out plugs
+	
+		connectAttr -f ($duplicatShape[0] + ".outMesh") ($dupli[0] +  ".inMesh");
+		getAttr -silent ($dupli[0] + ".outMesh"); // forces evaluation
+		disconnectAttr ($duplicatShape[0] + ".outMesh") ($dupli[0] +  ".inMesh");
+		delete $duplicat[0];
+		   
+		//-- check existing cacheFile
+		
+		string $listSelCo[] = `listConnections -t historySwitch -s on -d off $selShape[0]`;
+		
+		// -- check nClothNode
+	
+		string $ncloth[];
+	
+		for($obj in $selShape)
+			{
+			string $current[]=`listConnections -t nCloth $obj`;
+	
+			if(`size($current)`>0)
+				{
+				$ncloth[0] =$current[0];
+				break;
+				}
+
+			else
+	            {
+	            clear($ncloth);
+	            }
+			}    
+			
+		// -- If nClothNode found > assign the same nCache
+	 
+		if (`size($ncloth)` == 1)	
+			{
+			
+			// -- assign the same shader
+		
+			string $meshShadersource[] = `listRelatives -s -ni $sel[$i]`;
+			ART_transferObjShading $meshShadersource[0] $dupliShp;    	
+			
+			// -- Find Ncache node
+			
+			string $nClothShape[] = `listRelatives -s $ncloth`;
+			string $listNCacheNode[] = stringArrayRemoveDuplicates (`listConnections -t cacheFile -s on -d off $nClothShape[0]`);
+	
+			for($k=0; $k < size($sel); $k++)
+				{
+					
+				// -- Assign Ncache  node
+			
+				$switch = createHistorySwitch($dupliShp,false);
+				connectAttr ($listNCacheNode[0]+".outCacheData[0]") ($switch+".inPositions[0]");
+				connectAttr ($listNCacheNode[0]+".inRange") ($switch+".playFromCache"); 
+	
+				}        
+	
+			
+			}
+		
+		else
+			{
+		
+			//-- If nCloth cache doesn t  exist , but geoCache does, then assign the same geoCache
+	
+			// -- assign the same shader
+	
+			ART_transferObjShading $selShape[0] $dupliShp; 
+	
+			if (`size($listSelCo)`>0)
+				{
+			
+				// -- Find GeoCache node
+			
+				string $listCacheNode[] = stringArrayRemoveDuplicates (`listConnections -t cacheFile -s on -d off $listSelCo[0]`);
+		
+				for($j=0; $j < size($sel); $j++)
+					{
+						
+						// -- Assign Geocache node        
+				
+						$switch = createHistorySwitch($dupli[0],false);
+						connectAttr ($listCacheNode[0]+".outCacheData[0]") ($switch+".inPositions[0]");
+						connectAttr ($listCacheNode[0]+".inRange") ($switch+".playFromCache"); 
+		
+					}
+		
+				}
+			else
+				{
+					
+				// -- If either ncloth cache either geo cache exist, then create a new one.
+				
+				// -- set cache using the current timeLine
+				
+				$start = `playbackOptions -q -minTime`; 
+				$end   = `playbackOptions -q -maxTime`;
+			
+			    // -- set the path to write the cache to the sandbox		
+				
+				$userEnvName = `getenv "USER"`;
+				string $shotName = `file -q -sn -shn`;        
+				string $removeExtension = `match "^[^\-Cfx.]*" $shotName`;
+				string $folderName = `substitute "PL_" $removeExtension ""`;
+				$cacheTmpDir = ("/u/lorax/Users/" + $userEnvName + "/Sandbox/Tmp/" + $folderName + "/");
+				
+			    // -- define cache name
+				
+			    string $getCacheName = ($dupli[0] + "Shape");
+			    string $RealCacheName = substituteAllString ($getCacheName, ":", "_");
+				string $finalCacheName = `substitute "|" $RealCacheName ""`;
+
+							  
+			    // --	create Geo Cache
+			  
+			    select -r $sel[$i];
+			    $cacheFile = `doCreateGeometryCache 5 { "2", "0", "1", "OneFile", "0",$cacheTmpDir,"1",$finalCacheName,"0", "export", "0", "1", "1","0","1","mcc" }`;
+		
+				// -- assign the new cache created on the duplicated object
+			
+				string $channels[] = `cacheFile -fileName ($cacheTmpDir + $finalCacheName + ".xml") -q -channelName`;
+				string $switch = createHistorySwitch($dupli[0],false);
+				string $attachCache = `cacheFile -attachFile -f ($cacheTmpDir + $finalCacheName + ".xml") -cnm $channels[0] -ia ($switch+".inp[0]")`;
+				setAttr ($switch+".playFromCache") true;     
+			
+				} 
+		
+		}
+		
+	}
+} 

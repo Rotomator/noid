@@ -1,0 +1,290 @@
+//=============================================================================
+//
+//	ATools - Various generic Tools and Procs.
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    2.5
+//
+// Created  :    27/06/2007
+// Modified :    20/08/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- ATools_listPolyShapes returns only Poly Shapes from obj & component
+//
+//				- ATools_listNurbsShapes returns only NURBS Shapes from obj & component
+//
+//				- ATools_listSubdShapes returns only Subdiv Shapes from obj & component
+//
+//				- ATools_listShapes returns Poly, NURBS and Subdiv Shapes from obj & component
+//
+//				- ATools_listGeoShapes returns only geometrical shapes from an Array
+// 				  of shapes and transforms, with "notRef" and "onlyVisible" options
+//
+//				- 
+//
+//				- 
+//
+//-----------------------------------------------------------------------------
+//=============================================================================
+
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that returns only Poly Shapes from an Array of shapes/transforms/components
+//		<< takes for arg an array of shapes/transforms/components
+//
+//		>> returns the Poly Shapes
+//
+//-------------------------------------------------------------------------
+//
+global proc string[] ATools_listPolyShapes ( string $sel[] )
+{
+	string $curSel;
+	string $validSel[];
+	string $objSel[];
+	string $compSel[];
+	string $filtSel[];
+	
+	
+	// Remove non-existing objects
+	//
+	for ($curSel in $sel)
+	{
+		if ( `objExists $curSel`) {
+			$validSel[size($validSel)] = $curSel;
+		}
+	}
+	
+	
+	// Keep Poly shapes and remove non Poly objects
+	// Get Poly shapes from Poly Components
+	//
+	$objSel		= `filterExpand -fullPath true -sm 12 $validSel`;
+	$compSel	= `listRelatives -parent -fullPath (filterExpand ("-expand", 0, "-fullPath", 1, "-sm", 31, "-sm", 32, "-sm", 34, "-sm", 35, $validSel))`;
+	
+	$filtSel	= `stringArrayRemoveDuplicates (stringArrayCatenate ($objSel, $compSel))`;
+
+
+	return $filtSel;
+}
+
+
+
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that returns only NURBS Shapes from an Array of shapes/transforms/components
+//		<< takes for arg an array of shapes/transforms/components
+//
+//		>> returns the NURBS Shapes
+//
+//-------------------------------------------------------------------------
+//
+global proc string[] ATools_listNurbsShapes ( string $sel[] )
+{
+	string $curSel;
+	string $validSel[];
+	string $objSel[];
+	string $compSel[];
+	string $filtSel[];
+	
+	
+	// Remove non-existing objects
+	//
+	for ($curSel in $sel)
+	{
+		if ( `objExists $curSel`) {
+			$validSel[size($validSel)] = $curSel;
+		}
+	}
+	
+	
+	// Keep NURBS shapes and remove non NURBS objects
+	// Get NURBS shapes from NURBS Components
+	//
+	$objSel		= `filterExpand -fullPath true -sm 10 $validSel`;
+	$compSel	= `listRelatives -parent -fullPath (filterExpand ("-expand", 0, "-fullPath", 1, "-sm", 28, "-sm", 41, "-sm", 42, "-sm", 43, "-sm", 44, "-sm", 45, "-sm", 72, $validSel))`;
+	
+	$filtSel	= `stringArrayRemoveDuplicates (stringArrayCatenate ($objSel, $compSel))`;
+
+
+	return $filtSel;
+}
+
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that returns only Subdiv Shapes from an Array of shapes/transforms/components
+//		<< takes for arg an array of shapes/transforms/components
+//
+//		>> returns the Subdiv Shapes
+//
+//-------------------------------------------------------------------------
+//
+global proc string[] ATools_listSubdShapes ( string $sel[] )
+{
+	string $curSel;
+	string $validSel[];
+	string $objSel[];
+	string $compSel[];
+	string $filtSel[];
+	
+	
+	// Remove non-existing objects
+	//
+	for ($curSel in $sel)
+	{
+		if ( `objExists $curSel`) {
+			$validSel[size($validSel)] = $curSel;
+		}
+	}
+	
+	
+	// Keep Subdiv shapes and remove non Subdiv objects
+	// Get Subdiv shapes from Subdiv Components
+	//
+	$objSel		= `filterExpand -fullPath true -sm 68 $validSel`;
+	$compSel	= `listRelatives -parent -fullPath (filterExpand ("-expand", 0, "-fullPath", 1, "-sm", 36, "-sm", 37, "-sm", 38, "-sm", 73, $validSel))`;
+	
+	$filtSel	= `stringArrayRemoveDuplicates (stringArrayCatenate ($objSel, $compSel))`;
+
+
+	return $filtSel;
+}
+
+
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that returns Poly, NURBS and Subdiv Shapes an Array of shapes/transforms/components
+//		<< takes for arg an array of shapes/transforms/components
+//
+//		>> returns the Poly, NURBS and Subdiv Shapes
+//
+//-------------------------------------------------------------------------
+//
+global proc string[] ATools_listShapes ( string $sel[] )
+{
+	string $polySel[];
+	string $nurbsSel[];
+	string $subdSel[];
+	string $filtSel[];
+
+	
+	$polySel	= ATools_listPolyShapes  ($sel);
+	$nurbsSel	= ATools_listNurbsShapes ($sel);
+	$subdSel	= ATools_listSubdShapes  ($sel);
+	
+	$filtSel	= stringArrayCatenate ($polySel, $nurbsSel);
+	$filtSel	= stringArrayCatenate ($filtSel, $subdSel);
+
+
+	return $filtSel;
+}
+
+
+
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that returns only geometric objects from an Array of shapes and transforms
+//		<< takes for arg an array of shapes and transforms
+//		<< takes for arg a boolean to treat only non-referenced objects or all
+//		<< takes for arg a boolean to treat only visible objects or all
+//
+//		>> returns a selection of Shapes matching the Options
+//
+//-------------------------------------------------------------------------
+//
+global proc string[] ATools_listGeoShapes ( string $sel[], int $notRef, int $onlyVis )
+{
+	string $curSel;
+	string $curShape;
+	string $tempSel[];
+	string $filtSel[];
+	string $visibleShape[];
+
+	
+	// Get all the shapes out from the selection
+	//
+	for ($curSel in $sel)
+	{
+		// Remove non-existing objects
+		//
+		if ( !`objExists $curSel`) {
+			continue;
+		}
+		
+		if (`nodeType $curSel` == "transform")
+		{
+			// get the first shape with fullpath
+			//
+			$tempSel = `listRelatives -shapes -fullPath -ni $curSel`;
+			$curSel = $tempSel[0];
+		}
+		
+		if ( `size (ls ("-typ", "nurbsCurve", $curSel))` ||
+			 `size (ls ("-typ", "nurbsSurface", $curSel))` ||
+			 `size (ls ("-typ", "subdiv", $curSel))` ||
+			 `size (ls ("-typ", "mesh", $curSel))`)
+		{
+			$tempSel = `ls -long $curSel`;
+			if (size($tempSel) > 1) warning ("More than one object matches name: \"" + $curSel + "\", taking the first one");
+			$curShape = $tempSel[0];
+			
+
+			// keep only visible shapes if option is ON
+			//
+			$visibleShape = `ls -visible $curShape`;
+			
+			if ($onlyVis && !`size($visibleShape)`)
+				continue;
+			
+			
+			// test the shape's type and add it depending on "Not REF" option
+			//
+			if ($notRef && !`referenceQuery -isNodeReferenced $curShape`)
+			{
+				$filtSel[size($filtSel)] = $curShape;
+				stringArrayRemoveDuplicates $filtSel;
+			}
+			else if (!$notRef)
+			{
+				$filtSel[size($filtSel)] = $curShape;
+				stringArrayRemoveDuplicates $filtSel;
+			}
+		}
+	}
+
+
+
+	if 		(!`size $filtSel` && $notRef)  warning "Select at least one Non-Referenced Geometry !";
+	else if (!`size $filtSel` && !$notRef) warning "Select at least one Geometry !";
+	
+	
+	return $filtSel;
+}
+
+
+
+
+

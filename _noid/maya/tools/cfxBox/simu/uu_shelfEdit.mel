@@ -1,0 +1,211 @@
+
+global proc uu_shelfEdit()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	string $wndNameUI = "Ui";
+
+	/*
+	process
+	-----------------------------------------------------*/	
+
+        if (`window -ex $wndNameUI`){
+                deleteUI $wndNameUI;      // kill it
+		}
+		
+        window 		-width 		50
+							-toolbox	true
+							-sizeable	false
+							 $wndNameUI;
+			string $menuBarLayoutUi = `menuBarLayout`;
+			
+			menu -label "Load" -helpMenu true;
+			radioMenuItemCollection;
+						menuItem -label "ShelfTop"   -c "uu_refresh" -radioButton off shelfT;
+						menuItem -label "ShelfMid"    -c "uu_refresh" -radioButton off  shelfM;
+						menuItem -label "ShelfBot"    -c "uu_refresh" -radioButton off  shelfB;
+
+			rowColumnLayout -w 50 -h 30;
+			
+				textScrollList -allowMultiSelection true uulist;
+				
+				separator -height 5 -style "none";
+				text -l " New name:" -al "left";
+				separator -height 5 -style "none";			
+				textField uuname;			
+				separator -height 5 -style "none";			
+				text -l " New icon:" -al "left";
+				textFieldButtonGrp  -bl "choose" -bc "seticonPath" uu_icon ;				
+				separator -height 5 -style "none";			
+				text -l " Annotation:" -al "left";
+				separator -height 5 -style "none";
+				textField uuannot;
+				separator -height 5 -style "none";
+				
+				button -l  "Edit" -c "uuedit(1)";
+				button -l "Delete" -c "uuedit(2)";
+
+				separator -height 5 -style "none";
+
+showWindow $wndNameUI;
+
+}
+
+global proc string[] etat()
+{
+	/*
+	variables
+	-----------------------------------------------------*/
+	
+	global int		$mgDebug;
+	string $listS[]={"uu_customA","uu_customB","uu_customC"};
+	string $allShel[];
+
+	/*
+	process
+	-----------------------------------------------------*/	
+if(`menuItem -q -radioButton shelfT`==1)
+{
+			$allShel=`shelfLayout -q -childArray $listS[0]`;
+}
+if(`menuItem -q -radioButton shelfM`==1)
+{
+					$allShel=`shelfLayout -q -childArray $listS[1]`;
+}
+	
+if(`menuItem -q -radioButton shelfB`==1)
+{
+					$allShel=`shelfLayout -q -childArray $listS[2]`;
+}
+	
+
+
+	
+	/*
+	retours
+	-----------------------------------------------------*/
+	
+return $allShel;
+	
+	/*
+	*/	
+}
+
+
+global proc uu_refresh()
+{
+	string $allShel[];
+	string $label;
+	
+	$allShel=`etat`;
+	textScrollList -e -ra uulist;
+	
+		for($button in $allShel)
+			{
+				$label=`shelfButton -q -l $button`;
+					if((`gmatch $label "" `)||( `gmatch $label "MEL Command"`))
+					{
+						$label=`shelfButton -q -ann $button`;
+					}
+
+				textScrollList -e -a $label uulist;
+			}
+}
+
+
+global proc uuedit(int $Typ)
+{
+	
+	int $button[];
+	string $labe;
+	string $ann;
+	string $icon;
+	string $realButton;
+	string $allShel[];
+	int $buttonOnly;
+//query item 
+
+ $button=`textScrollList -q -sii uulist`;
+ $buttonOnly=$button[0] - 1;
+ $allShel=`etat`;
+ $realButton=$allShel[$buttonOnly];
+ $labe=`textField -q -tx uuname`;
+ $ann=`textField -q -tx uuannot`;
+ $icon=`textFieldButtonGrp -q -tx uu_icon`;
+
+ 
+ switch($Typ){
+	 
+	 case 1:
+//list all button in shelf
+
+//custom current button
+	shelfButton -e 
+						 -l $labe
+						 -style "iconAndTextVertical"
+						 $realButton;
+ 
+//custom current button icon if icon choose
+
+		  if ( $icon!="")
+		 {
+			 shelfButton -e 
+									-l $labe
+									-style "iconAndTextVertical"
+									-image $icon
+									-image1 $icon
+									$realButton;
+		 }
+		 		  if ( $ann!="")
+		 {
+			 shelfButton -e 
+									-ann $ann
+									$realButton;
+		 }
+		 
+		 
+		 break;
+		 
+		 
+		 case 2:
+		  	deleteUI $realButton;
+		 break;
+
+ }
+		 uu_refresh();
+}
+
+
+
+/*global proc uiDelete()
+{
+	string $but[];
+	string $Newbut;
+ 
+	$but=`textScrollList -q -si uulist`;
+ //delete current buttons
+ 	deleteUI $but[0];
+	
+//delete current buttons form layout
+	$Newbut=`textScrollList -e -ri $but[0] uulist`;
+}
+*/
+
+
+ global  proc seticonPath()
+{
+
+	string $filename[];
+	string $icon;
+	
+	$filename = `fileDialog2 -fileMode 4 -dialogStyle 2`;	 
+	$icon =`textFieldButtonGrp -e -tx $filename uu_icon`;
+}
+
+
+ 
+
+

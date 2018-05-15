@@ -1,0 +1,844 @@
+//=============================================================================
+//
+//	Correc. Frame	- Script that corrects animation or simulation "plops" at given frames
+//					- Duplicates the source nMesh at each given frame
+//					- Wraps each copy on a reference mesh and generates file cache
+//					- Blends all caches with a smooth interpolation
+//					- Inject the resulted blend with a blendShape into the source nMesh
+//					- Activate Artisan painting tool to allow user editing the result's weights
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.5
+//
+// Created  :    16/08/2010
+// Modified :    23/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AcorrecFrame" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that allows corrections on nMesh at key poses and smoothly interpolates them
+//		<< takes for arg the source nMesh that will be duplicated at each key pose
+//		<< takes for arg a reference mesh (or faces) on which duplicated meshes will be wrapped at each key pose
+//		<< takes for arg a list of frames that defines the key poses (ie. start, middle, end frame...)
+//
+//-------------------------------------------------------------------------
+
+
+
+global proc paintOnSelectedBlendS(string $input){
+
+    // define the paintable obj and attr here
+    string $currTool = `currentCtx`;
+    string $cmd = ("artAttrCtx -q -asl " + $currTool );
+    string $ath = `eval $cmd`;
+
+    if ( $ath != $input )
+    {
+        // if the plug is null use a different syntax
+        if( $input == "\"\"" ) {
+            $cmd = "artAttrCtx -e -pas \"\" " + $currTool;
+        } else {
+            // create the nodeType.plug string and set it as attribute selected.
+            $cmd = "artAttrCtx -e -pas " + "blendShape." + $input + " " + $currTool;
+        }
+        eval $cmd;
+    }
+}
+
+
+global proc clearWork(string $meshNc, int $frameL[]){
+
+	$startFr = $frameL[0];
+	$endFr   = $frameL[0];
+	
+	for ($curFrame in $frameL)
+	{
+		$startFr = `min $startFr $curFrame`;
+		$endFr   = `max $endFr $curFrame`;
+	}
+
+  doReplaceNclothCacheFrames 2 $startFr $endFr 0 1 0 0 "linear" "linear" "" 1 1 0;
+
+  print "\/\/ ---------------------------------------------------------------------- \n"; 
+  print ("\/\/ --Create cache at frame " + $startFr + " to frame " + $endFr + " on " + $meshNc + "\n");
+
+
+
+
+
+  string $shapesDeform[]=`listRelatives -s -ni -path $meshNc`;
+
+  string $historyShape[]=`listHistory -lv 1  $shapesDeform[0]`;
+
+  string $ShapeBlend[]=`ls -typ blendShape $historyShape`;
+
+  string $OUtShape[] = `listConnections -t mesh -d off -s on $ShapeBlend[0]`;
+
+    delete $ShapeBlend[0];
+  print ("delete" + $ShapeBlend[0] + "\n");
+
+    delete $OUtShape[0];
+  print ("delete" + $OUtShape[0] + "\n");
+
+}
+
+
+global proc correctOneFrame(){
+
+string $window		= "win_AcorrecFrame";
+string $b_createOne = ($window+"_createOne");
+string $sel[]=`ls -sl`;
+
+  blendShape -name "correctBlend" -w 0 1;
+
+    print ("Create blend between " + $sel[0] + " " + $sel[1] );
+
+select -r $sel[1];
+
+doReplaceNclothCacheFrames 1 1 10 0 1 0 0 "linear" "linear" "" 1 1 0;
+
+  print "Replace current frame" ;
+
+string $listblend[]=`ls -typ blendShape "correctBlend*"`;
+
+  print ("Delete BlendShape: " + $listblend[0] );
+
+delete $listblend;
+
+hide $sel[0];
+  print ("hide " + $sel[0] );
+}
+
+global proc A_correcFrame(string $sourceMesh, string $wrapperL[], int $frameList[])
+{
+	string $tempArray[];
+	string $compSel[];
+	int    $isCompon = 0;
+	string $wrapper;
+	string $userEnvName;
+	string $cacheTmpDir;
+	int    $startFr;
+	int    $endFr;
+	string $cleanName;
+	string $dupliAtFrm[];
+	string $cacheAtFrm[];
+	string $dupliFinal;
+	string $cSwitch;
+	string $cacheNode;
+	string $blendedCaches[];
+	string $corFrmBS[];
+	
+	// ------------------------------------------------------------
+	// -- Check arguments
+	//
+	if ( $sourceMesh == "" )
+	{
+		error ("No source mesh given !");
+	}
+	else
+	{
+		$tempArray = `filterExpand -fullPath false -sm 12 $sourceMesh`;
+		
+		if (!size($tempArray)) {
+			error ("Please give a POLYGONAL object as source !");
+		}
+	}
+	
+	
+	if ( !`size($wrapperL)` || $wrapperL[0] == "" )
+	{
+		error ("No reference wrap Mesh or Faces given !");
+	}
+	else
+	{
+		$tempArray = `filterExpand -fullPath true -sm 12 $wrapperL`;
+		$compSel   = `filterExpand -fullPath true -ex 0 -sm 34 $wrapperL`;
+		
+		if ( !size($tempArray) && !size($compSel) )
+		{
+			error ("Please give a POLYGONAL object or POLY FACES as wrap influence !");
+		}
+		else if ( !`size($tempArray)` )
+		{
+			// Take components only if no objects were selected
+			$isCompon  = 1;
+			$tempArray = `listRelatives -parent -fullPath $compSel[0]`;
+		}
+		
+		$wrapper = $tempArray[0];
+	}
+	
+	
+	if ( `size($frameList)` < 2 )
+	{
+		error "Please give at least 2 frames (Start/End) !";
+	}
+
+	
+	// ------------------------------------------------------------
+	// -- Check cache directory
+	//
+	$userEnvName = `getenv "USER"`;
+	$cacheTmpDir = ("/u/lorax/Users/" + $userEnvName + "/Sandbox/Tmp");
+	
+	if ( !`filetest -d $cacheTmpDir` ) {
+		system( "mkdir " + $cacheTmpDir);
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the start and end frames
+	//
+	$startFr = $frameList[0];
+	$endFr   = $frameList[0];
+	
+	for ($curFrame in $frameList)
+	{
+		$startFr = `min $startFr $curFrame`;
+		$endFr   = `max $endFr $curFrame`;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Remove any existing nameSpace and pipes
+	//
+	$cleanName = `match "[^|]*$" $sourceMesh`;
+	$cleanName = `substitute "^[^.]*:" $cleanName ""`;
+	
+	
+	// ------------------------------------------------------------
+	// -- If faces were selected, create a proxy with only those faces
+	//
+	if ($isCompon)
+	{
+		$tempArray = A_outMesh($compSel);
+		$wrapper = $tempArray[0];	
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Duplicate and wrap the $sourceMesh at each frame of $frameList, 
+	//    and generate a file cache for each duplicated mesh
+	//
+	print "\/\/ ---------------------------------------------------------------------- \n"; 
+	print "\/\/ -- Duplicate and wrap the nCloth mesh at each frame + generate a cache \n"; 
+	
+	for ($i=0; $i<size($frameList); $i++)
+	{
+		currentTime $frameList[$i];
+		
+		// Duplicate the nMesh at each key pose
+		$dupliAtFrm[$i] = `createNode transform -n ($cleanName + "_frm" + $frameList[$i])`;
+		createNode mesh -p $dupliAtFrm[$i] -n ($cleanName + "_frm" + $frameList[$i] + "Shape");
+		
+		connectAttr -f ($sourceMesh + ".outMesh") ($dupliAtFrm[$i] + ".inMesh");
+		sets -e -forceElement initialShadingGroup $dupliAtFrm[$i];
+		getAttr -silent ($dupliAtFrm[$i] + ".outMesh"); // force la propagation 
+		disconnectAttr ($sourceMesh + ".outMesh") ($dupliAtFrm[$i] + ".inMesh");
+		
+		// Wrap each duplicated mesh on the reference meshWrapper
+		select -r $dupliAtFrm[$i] $wrapper;
+if(`checkBox -q -v wrapMod`){
+		doWrapArgList "7" { "1","0","1", "2", "0", "1", "0", "1" }; // in smooth bind (not exclusive)
+print "\/\/ ---------------------------------------------------------------------- \n"; 
+print "\/\/ -- do wrap in smooth bind \n" ;
+}
+else{
+		doWrapArgList "7" { "1","0","1", "2", "1", "1", "0", "0" }; //in exclusive bind
+print "\/\/ ---------------------------------------------------------------------- \n"; 
+print "do wrap in exclusive bind \n" ;
+
+}
+		// Create file cache for each dupli.
+		//$tempArray = `doCreateGeometryCache 5 { "3", $startFr, $endFr, "OneFile", "0", $cacheTmpDir,"0",$dupliAtFrm[$i],"0", "export", "0", "1", "1","0","1","mcc" }`;
+		$tempArray = `filterExpand -fullPath true -sm 12 $dupliAtFrm[$i]`;
+		$tempArray = `cacheFile -f $dupliAtFrm[$i] -dir $cacheTmpDir -st $startFr -et $endFr -singleCache -format "OneFile" -doubleToFloat -points $tempArray[0]`;
+		$cacheAtFrm[$i] = $tempArray[0];
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Blend all caches on another duplicated $sourceMesh
+	//
+	print "\/\/ ---------------------------------------------------------------------- \n"; 
+	print "\/\/ -- Blend all caches on another duplicated nCloth mesh \n"; 
+	
+	delete $dupliAtFrm;
+	currentTime $startFr;
+	
+	// Create the duplicated mesh that will receive the caches
+	$dupliFinal = `createNode transform -n ($cleanName + "_correcFrame")`;
+	createNode mesh -p $dupliFinal -n ($cleanName + "_correcFrameShape");
+	
+	connectAttr -f ($sourceMesh + ".outMesh") ($dupliFinal + ".inMesh");
+	sets -e -forceElement initialShadingGroup $dupliFinal;
+	getAttr -silent ($dupliFinal + ".outMesh"); // force la propagation 
+	disconnectAttr ($sourceMesh + ".outMesh") ($dupliFinal + ".inMesh");
+	
+	// Create a history switch
+	$cSwitch = createHistorySwitch($dupliFinal,false);
+	$cSwitch = `rename $cSwitch "cacheSwitch#"`;
+	setAttr ($cSwitch+".playFromCache") true;
+	
+	// Create the first cache + cacheBlend and connect them
+	select -r $dupliFinal;
+	$cacheNode = `cacheFile -attachFile -f $dupliAtFrm[0] -dir $cacheTmpDir -ia ($cSwitch + ".inp[0]")`;
+	$cacheBlend = `cacheFileCombine`;
+	
+	// Create all other caches and connect them to the cacheBlend
+	for ($i=1; $i<size($frameList); $i++)
+	{
+		if (!`filetest -r ($cacheTmpDir + "/" + $dupliAtFrm[$i] + ".xml")`) {
+			error ("The cache file \""+ $dupliAtFrm[$i] + "\" doesn't exist !");
+		}
+		
+		$cacheNode = `cacheFile -createCacheNode -f $dupliAtFrm[$i] -dir $cacheTmpDir`;
+		cacheFileCombine -e -cc $cacheNode $cacheBlend[0];
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Activate+keyframe each cache at its corresponding frame, 
+	//    and interpolate smoothly the keys
+	//
+	print "\/\/ ---------------------------------------------------------------------- \n"; 
+	print "\/\/ -- Activate each cache at its corresponding frame \n"; 
+	
+	$blendedCaches = `cacheFileCombine -q -cc $cacheBlend[0]`;
+	
+	if (`size($blendedCaches)` != `size($frameList)`) {
+		error ("There is more/less caches in the cacheBlend than given frames !! Please check the cacheBlend node");
+	}
+	
+	for ($i=0; $i<size($blendedCaches); $i++)
+	{
+		currentTime $frameList[$i];
+		
+		// Key all caches to 0 on current frame
+		for ($j=0; $j<size($blendedCaches); $j++)
+		{
+			setAttr ($cacheBlend[0] + "." + $blendedCaches[$j]) 0;
+			setKeyframe -itt "flat" -ott "flat" ($cacheBlend[0] + "." + $blendedCaches[$j]);
+		}
+		
+		// Activate and key the cache corresponding to current frame
+		setAttr ($cacheBlend[0] + "." + $blendedCaches[$i]) 1;
+		setKeyframe  -itt "flat" -ott "flat" ($cacheBlend[0] + "." + $blendedCaches[$i]);
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Create a BlendShape of the duplicated mesh on $sourceMesh,
+	//    and activate Artisan to allow user painting its weights
+	//
+	print "\/\/ ---------------------------------------------------------------------- \n"; 
+	print "\/\/ -- Create a BlendShape of the duplicated mesh on the nCloth mesh \n"; 
+	
+	$corFrmBS = `blendShape -n "BS_correcFrame#" -before -tc 1 -o local $dupliFinal $sourceMesh`;
+	setAttr ($corFrmBS[0] + ".w[0]") 1;
+	toggle -template -state on $dupliFinal;
+	
+	// Activate the blendShape only between [start - end] frames
+	currentTime ($startFr - 1);
+	setAttr ($corFrmBS[0] + ".envelope") 0;
+	setKeyframe -itt "linear" -ott "linear" ($corFrmBS[0] + ".envelope");
+	
+	currentTime $startFr;
+	setAttr ($corFrmBS[0] + ".envelope") 1;
+	setKeyframe -itt "linear" -ott "linear" ($corFrmBS[0] + ".envelope");
+	
+	currentTime $endFr;
+	setAttr ($corFrmBS[0] + ".envelope") 1;
+	setKeyframe -itt "linear" -ott "linear" ($corFrmBS[0] + ".envelope");
+	
+	currentTime ($endFr + 1);
+	setAttr ($corFrmBS[0] + ".envelope") 0;
+	setKeyframe -itt "linear" -ott "linear" ($corFrmBS[0] + ".envelope");
+	
+	currentTime $startFr;
+	
+	
+	print "\/\/ ---------------------------------------------------------------------- \n"; 
+	print "\/\/ -- Activate Artisan to allow user painting its weights \n"; 
+	
+	// -- The maya "paint BS weights tool" menu button calls the following :
+	//ArtPaintBlendShapeWeightsTool;
+	//artAttrBlendShapeToolScript 4;
+	//artAttrInitPaintableAttr;
+	//artBlendShapeTargetIndex;
+	
+	// BlendShape weights Paint Tool	
+	
+	
+		$blendShpCtx = "artAttrBlendShapeContext";
+	 //Create the context if it doesn't already exists
+	if (!`contextInfo -ex $blendShpCtx`)
+	{
+		artAttrTool -q; // query the list of built-in tools
+		
+		// create a new context via artAttrCtx and specify the tool name via the -whichTool flag
+		artAttrCtx -whichTool "blendShapeWeights" -i1 "paintBlendshape.png" $blendShpCtx;
+	}
+	
+	//string $shapesDeform[]=`listRelatives -s -ni -path $sourceMesh`;
+	//string $historyShape[]=`listHistory -gl on  $shapesDeform[0]`;
+	//string $ShapeBlend[]=`ls -typ blendShape $historyShape`;
+
+	// Enter context
+	print $corFrmBS[0];
+	select -r $sourceMesh;
+	setToolTo $blendShpCtx;
+
+	//paint on create blendShape
+	//string $blendAsso= $corFrmBS[0] + ".targetWeights";
+	//paintOnSelectedBlendS($blendAsso);
+	  artSetToolAndSelectAttr( "artAttrCtx", "blendShape." + $corFrmBS[0] + ".targetWeights" );
+	  toolPropertyWindow;
+	
+	// Flood the weights to 0
+	artAttrCtx -e -sao "absolute" `currentCtx`;
+	artAttrCtx -e -opacity 1 -value 0 `currentCtx`;
+	artAttrCtx -e -clr `currentCtx`;
+	artAttrCtx -e -opacity 1 -value 1 `currentCtx`;
+	
+	
+	print "\/\/ -- End of Correc. Frame Script \n"; 
+	print "\/\/ ---------------------------------------------------------------------- \n"; 
+}
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Call Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh
+//
+//-------------------------------------------------------------------------
+//
+global proc crFr_getSrcMesh()
+{
+	string $window 		= "win_AcorrecFrame";
+	string $b_srcMesh	= ($window+"_srcMesh");
+	string $sel[];
+	
+	
+	$sel = `filterExpand -fullPath false -sm 12 (ls ("-sl"))`;
+	
+    if (!`size($sel)`)
+	{
+        error "Please select one POLYGONAL Object !";
+	}
+	
+	textFieldButtonGrp -e -tx $sel[0] $b_srcMesh;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that gets the selected mesh or the selected faces
+//
+//-------------------------------------------------------------------------
+//
+global proc crFr_getWrapper()
+{
+	string $window 		= "win_AcorrecFrame";
+	string $b_wrapper	= ($window+"_wrapper");
+	string $sel[];
+	string $compSel[];
+	string $selList;
+	
+	
+	$sel     = `filterExpand -fullPath false -sm 12 (ls ("-sl"))`;
+	$compSel = `filterExpand -fullPath false -ex 0 -sm 34 (ls ("-sl"))`;
+	
+    if ( !`size($sel)` && !`size($compSel)` )
+	{
+        error "Please select one POLYGONAL Object or POLY FACES !";
+	}
+	else if ( `size($sel)` )
+	{
+		$selList = $sel[0];
+	}
+	else
+	{
+		$selList = stringArrayToString($compSel, " ");
+	}
+	
+	textFieldButtonGrp -e -tx $selList $b_wrapper;
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that adds current time to "Frame List" control
+//
+//-------------------------------------------------------------------------
+//
+global proc crFr_addFrame()
+{
+	string $window 		= "win_AcorrecFrame";
+	string $f_frmList	= ($window+"_frmList");
+	string $curTime;
+	string $frmListTxt;
+	
+	
+	$frmListTxt = `textFieldGrp -q -tx $f_frmList`;
+	$curTime    = `currentTime -query`;
+	
+	if (`match ("\\["+$curTime+"\\]") $frmListTxt` == "")
+	{
+		$frmListTxt += ( "[" + $curTime + "] " );
+		textFieldGrp -e -tx $frmListTxt $f_frmList;
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that removes current time to "Frame List" control
+//
+//-------------------------------------------------------------------------
+//
+global proc crFr_rmvFrame()
+{
+	string $window 		= "win_AcorrecFrame";
+	string $f_frmList	= ($window+"_frmList");
+	string $curTime;
+	string $frmListTxt;
+	
+	
+	$frmListTxt = `textFieldGrp -q -tx $f_frmList`;
+	$curTime    = `currentTime -query`;
+	
+	if (`match ("\\["+$curTime+"\\]") $frmListTxt` != "")
+	{
+		$frmListTxt = `substitute ("\\["+$curTime+"\\]") $frmListTxt ""`;
+		textFieldGrp -e -tx $frmListTxt $f_frmList;
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that LAUNCHES the script when hitting "CREATE" button
+//
+//-------------------------------------------------------------------------
+//
+global proc crFr_apply(int $mode)
+{
+	string $window		= "win_AcorrecFrame";
+	string $b_srcMesh	= ($window+"_srcMesh");
+	string $b_wrapper	= ($window+"_wrapper");
+	string $f_frmList	= ($window+"_frmList");
+	
+	string $srcMesh 	= `textFieldButtonGrp -q -tx $b_srcMesh`;
+	string $wrapper		= `textFieldButtonGrp -q -tx $b_wrapper`;
+	string $frmString 	= `textFieldGrp -q -tx $f_frmList`;
+	
+	string $tempArray[];
+	string $frmList;
+	string $cmd;
+	
+	// -- Launch main proc
+	$tempArray = `stringToStringArray $frmString "] ["`;
+	$frmList   = `stringArrayToString $tempArray ", "`;
+	$FrameBorder = `stringToStringArray $frmString "] ["`;
+
+	$tempArray = `stringToStringArray $wrapper " "`;
+	$wrapper   = `stringArrayToString $tempArray "\", \""`;
+	
+	if($mode==0){
+	$cmd = ( "A_correcFrame(\"" + $srcMesh + "\", {\"" + $wrapper + "\"}, {" + $frmList + "})" );
+	
+	print ("\/\/ CMD : " + $cmd + " \n");
+	eval($cmd);
+	}
+	
+	if($mode==1){	
+	//int $numbFrame =`size($FrameBorder)`;
+	//string $frame[]=$FrameBorder;
+	$cmd = ( "clearWork(\"" + $srcMesh + "\", {" + $frmList + "})" );
+	eval($cmd);
+	}
+}
+
+
+
+//-------------------------------------------------------------------------
+// Procedure that calls the ABOUT window
+//
+//-------------------------------------------------------------------------
+//
+global proc AcorrecFrameAbout(string $version)
+{
+	string $winAbout = "win_AcorrecFrame_about";
+
+	windowPref -enableAll false;
+
+	if (`window -exists $winAbout`)
+		deleteUI -window $winAbout;
+
+	$winAbout =`window -title "About..."
+		-iconName "About win_AcorrecFrame"
+		-toolbox true
+		-sizeable false
+		-widthHeight 300 300
+		-topEdge 256
+		-leftEdge 512
+		$winAbout`;
+
+	columnLayout -adjustableColumn true;
+
+		text -label "";
+		text -label " Script    : AcorrecFrame" -align "left";
+		text -label (" Version : "+ $version) -align "left";
+		text -label " Creator : Ali" -align "left";
+		text -label " Contact : chibi_ali@homtail.com" -align "left";
+		text -label "";
+		text -label "";
+		text -label " Features : " -align "left";
+		text -label "";
+		text -label " Corrects animation or simulation \"plops\" at given frames" -align "left";
+		text -label "";
+		text -label " - Duplicates the source nMesh at each given frame" -align "left";
+		text -label " - Wraps each copy on a reference mesh and generates file cache" -align "left";
+		text -label " - Blends all caches with a smooth interpolation" -align "left";
+		text -label " - Inject the resulted blend with a blendShape into the source nMesh" -align "left";
+		text -label " - Activate Artisan painting tool to allow user editing the result's weights" -align "left";
+		text -label "";
+
+	windowPref -enableAll true;
+	showWindow $winAbout;
+}
+
+
+
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc AcorrecFrame()
+{
+	string $version = "v1.5";
+	string $window = "win_AcorrecFrame";
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		windowPref -remove $window;
+
+		$window = `window 	-title 		("Correc. Frame " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"AcorrecFrame"
+							-width 		430
+							-height 	300
+							-sizeable	true
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title 		("Correc. Frame " + $version)
+							-iconName 	"AcorrecFrame"
+							-width 		430
+							-height 	300
+							-sizeable	true
+							$window`;
+	}
+	
+	
+
+	// -- Create a Form Layout to contain window's body
+	//
+	string $parentFrmLyt = `formLayout -numberOfDivisions 100 myFrmLyt`;
+	
+		// Create a Column Layout to contain the menu
+		//
+		string $parentCoLyt = `columnLayout -adjustableColumn true myCoLyt`;
+
+			// Create a menu for the window
+			//
+			string $menuBarLayout = `menuBarLayout`;
+			setParent ..;
+
+			//separator -height 10 -style "none";
+		
+		setParent ..;
+		
+		
+		// Body layout
+		//
+		//string $bodyLyt = `columnLayout -adjustableColumn true exCoLyt01`;
+		string $bodyLyt = `scrollLayout -w 420 -h 200 bodyLyt01`;
+		
+			// Fields
+			separator -height 10 -style "none";
+			
+			string $b_srcMesh = `textFieldButtonGrp
+								-l "Cloth Mesh"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "The source nMesh that will be duplicated at each key pose"
+								-bc "crFr_getSrcMesh"
+								($window+"_srcMesh")`;
+
+			separator -height 10 -style "none";
+			
+			string $b_wrapper = `textFieldButtonGrp
+								-l "Wrapper Mesh"
+								-ed 1
+								-bl " Select "
+								-cw 1 100
+								-cw 3 55
+								-adj 2
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-columnAttach 3 "left"  5
+								-columnAttach 3 "right" 5
+								-ann "The reference mesh on which duplicated meshes will be wrapped at each key pose"
+								-bc "crFr_getWrapper"
+								($window+"_wrapper")`;
+
+
+			separator -height 10 -style "none";
+			
+			string $f_frmList  = `textFieldGrp
+								-l "Frame List"
+								-cw 1 100
+								-columnAttach 1 "left" 20
+								-columnAttach 1 "right" 5
+								-ann "The list of frames that defines the key poses (ie. [1] [15] [23])"
+								($window+"_frmList")`;
+
+			gridLayout -numberOfColumns 2 -cellWidth 150;
+				
+				text -l "";
+				string $b_addFrm  = `iconTextButton
+									-l "Add current Frame"
+									-style "iconAndTextHorizontal"
+									-image1 "setEdAddCmd.png" 
+									-width 150
+									-ann "Add current active frame to the \"Frame List\" control"
+									-c "crFr_addFrame"
+									($window+"_addFrm")`;
+				text -l "";
+				string $b_rmvFrm  = `iconTextButton
+									-l "Remove cur. Frame"
+									-style "iconAndTextHorizontal"
+									-image1 "setEdRemoveCmd.png" 
+									-width 150
+									-ann "Remove current active frame from the \"Frame List\" control"
+									-c "crFr_rmvFrame"
+									($window+"_rmvFrm")`;
+
+
+rowLayout -numberOfColumns 1
+-columnAlign  1 "left";
+
+
+						checkBox -label "wrap in smooth Bind" -v 1 wrapMod;
+				setParent ..;
+			setParent ..;
+					   
+
+		setParent ..;
+
+
+		// Buttons
+        string $column = ` rowColumnLayout -numberOfColumns 2  -w 420`;
+
+		string $b_create = `button -label "Create" -w 150 -command "crFr_apply(0)" ($window+"_create")`;
+		string $b_close = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close")`;
+		string $b_createOne = `button -label "Create One Frame" -w 150 -command "correctOneFrame" ($window+"_createOne")`;
+		string $b_clear = `button -label "Replace and Clean" -w 150 -command "crFr_apply(1)" ($window+"_clear")`;
+
+		setParent ..;
+
+	
+	
+	// -- Edits the MAIN FORM layout
+	//
+	formLayout -edit
+		-attachForm     $parentCoLyt	"top"     0
+		-attachForm     $parentCoLyt	"left"    0
+		-attachForm     $parentCoLyt	"right"   0
+		
+		-attachControl  $bodyLyt		"top" 	  0 $parentCoLyt
+		-attachForm     $bodyLyt		"left"    5
+		-attachForm     $bodyLyt		"right"   5
+		-attachControl	 $bodyLyt		"bottom"  5 $column		
+		
+
+		
+    -attachNone     $column     "top"
+    -attachForm     $column     "left"   5
+    -attachForm     $column     "bottom" 5
+    -attachForm     $column     "right"  5
+
+		
+
+	$parentFrmLyt;
+	
+	
+	// -- Edits the window's menu
+	//
+	setParent $menuBarLayout;
+		menu -label "Help" -helpMenu true;
+			menuItem -label "About..." -c ("AcorrecFrameAbout \"" + $version + "\"") helpMit;
+	
+	
+	// -- Launch the window
+	//
+	showWindow $window;
+}

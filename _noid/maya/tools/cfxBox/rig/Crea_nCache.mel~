@@ -1,0 +1,497 @@
+//=============================================================================
+//
+//	Export Geo Cache - Script that exports/imports geometry cache from selection
+//					  - If selection is a group, takes all the hierarchy
+//					  - Keeps the openGL view frozen while exporting for fast export
+//					  - Creates a unique cache file
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.6
+//
+// Created  :    23/07/2010
+// Modified :    10/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "Crea_nCache" to open the UI.
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that exports geometry cache from selection
+//		<< takes for arg the name of the cache file
+//		<< takes for arg the cache file's path
+//		<< takes for arg the start frame
+//		<< takes for arg the end frame
+//		<< takes for arg a boolean to attach a cacheNode to the objects
+//
+//-------------------------------------------------------------------------
+
+//-------------------------------------------------------------------------
+// Procedure that SETS the cache files' path -- EXPORT
+//
+//-------------------------------------------------------------------------
+//
+global proc setExpCachePath()
+{
+	string $window 			= "win_exportnCache";
+	string $b_cachePath 	= ($window+"_cachePath");
+	string $filename[];
+	
+	
+	string $filename[] = `fileDialog2 -fileMode 3 -dialogStyle 2`;
+	
+	textFieldButtonGrp -e -tx $filename $b_cachePath;
+}
+
+
+//-------------------------------------------------------------------------
+// Procedure that enables/disables a control depending on a radioButtonGrp
+//
+//-------------------------------------------------------------------------
+//
+global proc toggleRadio()
+{
+	string $window  = "win_exportnCache";
+	string $r_timeRg  = ($window+"_timeRg");
+	string $b_start = ($window+"_start");
+	string $b_end   = ($window+"_end");
+	
+	
+	if (`radioButtonGrp -q -sl $r_timeRg` == 2)
+	{
+		intFieldGrp -e -en 1 $b_start;
+		intFieldGrp -e -en 1 $b_end;
+	}
+	else
+	{
+		intFieldGrp -e -en 0 $b_start;
+		intFieldGrp -e -en 0 $b_end;
+	}
+}
+
+global proc exportnCache(string $cacheName, string $cachePath, int $startFr, int $endFr)
+{
+string $window  = "win_exportnCache";
+	string $c_cNode			= ($window+"_cNode");
+
+    string $sel[];
+  string $objSel[];
+    string $cacheCmd;
+	string $cacheFile[];
+    string $cacheNode;
+	string $switch;
+	
+
+    
+	// ------------------------------------------------------------
+	// -- Set Timer start
+	//
+	$startTime = `timerX`;
+	
+	
+	// ------------------------------------------------------------
+    // -- Get all shapes from selection or hierachy
+	//
+	//$objSel = `filterExpand -fullPath true -sm 12 -sm 10 -sm 9 -sm 68 (ls ("-sl"))`;
+	$sel 	= `ls -sl`;
+	
+    
+    if (!`size($sel)`)
+        error "Please select at least one Object to export !";
+    
+	
+	// ------------------------------------------------------------
+    // -- Use the maya "doCreate..." command instead
+	//    (because it has file '2GB auto-segmentation', cache existing check, etc)
+	//
+	select -r $sel;
+
+if (`checkBoxGrp -q -v1 $c_cNode`){ 
+    
+      $cacheFile = `	doCreateNclothCache 4 { "3", $startFr, $endFr, "OneFile", "1", $cachePath,"1","","0", "add", "0", "1", "1","0","1" }` ;
+    
+}
+  
+else{
+	$cacheFile = `	doCreateNclothCache 4 { "3", $startFr, $endFr, "OneFile", "1", $cachePath,"0",$cacheName,"0", "add", "0", "1", "1","0","1" }`;
+
+}
+
+
+	// ------------------------------------------------------------
+	// -- Stop Timer
+	//
+	$totalTime = `timerX -startTime $startTime`;
+	print ("\/\/ Total Time : "+$totalTime+"\n");
+}
+global proc string setDirectory(string $currentSel){
+
+    string $fileName = `file -q -sceneName`;
+    string $DName=`match "[^/\\]*$" $fileName`;
+    string $DNamereduce=`match "^[^\.]*" $DName`;
+    string $component =match( "^.*/", $fileName );
+    int $sz = size( $component );
+
+  // Strip off trailing '/'
+  //
+      if ( ( $sz > 1 ) && ( substring( $component, $sz, $sz ) == "/" ) ) {
+	  $component = substring( $component, 1, ($sz - 1) );
+	  }
+
+    string $cacheDirectory= $component + "_SyCache/" + $DNamereduce + "_SyCache/";
+
+	  string $cacheName= $currentSel;	  
+	  string $foldername = `substitute ":[^:]*$" $cacheName ""`;
+
+    // create a folder in directory
+
+	  sysFile -makeDir ($cacheDirectory + $foldername);
+	  string $foldercache = $cacheDirectory + $foldername ; 
+			
+			
+	string $shapes[] = `listRelatives -s -path $currentSel`;
+	string $Nucfolder[]=`listConnections -d off -s on -t nucleus $shapes[0]`;
+	string $shortCacheName = `match "[^:]*$"  $Nucfolder[0]`;
+	$cachePath = $foldercache + "/" + $shortCacheName; 
+	
+    
+    return $cachePath;
+      }
+
+
+
+global proc apply(){
+
+	string $window			= "win_exportnCache";
+	string $b_cachePath	= ($window+"_cachePath");
+	string $b_cacheName	= ($window+"_cacheName");
+	string $r_timeRg		= ($window+"_timeRg");
+	string $b_start			= ($window+"_start");
+	string $b_end			= ($window+"_end");
+	string $c_cNode			= ($window+"_cNode");
+
+	
+	string $cachePath 	 = `textFieldButtonGrp -q -tx $b_cachePath`;
+	string $cacheName	 = `textFieldGrp -q -tx $b_cacheName`;
+	int    $timeRg		 = `radioButtonGrp -q -sl $r_timeRg`;
+	int    $createCacheNode = `checkBoxGrp -q -v1 $c_cNode`;
+	int    $start;
+	int    $end	;
+	int    $tmpArray[];	
+
+// -- Check the UI's options
+		//
+		if ($cachePath == "")
+		{
+string $listB[] = `ls -sl`;
+$cachePath=`setDirectory($listB[0])`;
+	textFieldButtonGrp -e -tx $cachePath $b_cachePath;
+		}
+		if ($cacheName == "")
+		{
+			error "Please give a cache name !!";
+		}
+		
+		
+		// -- Get time values depending on Timerange radioButtonGrp
+		//
+		if ($timeRg == 1)
+		{
+			$start = `playbackOptions -q -minTime`; 
+			$end   = `playbackOptions -q -maxTime`;
+		}
+		else
+		{
+			$tmpArray = `intFieldGrp -q -v $b_start`;
+			$start = $tmpArray[0];
+			$tmpArray = `intFieldGrp -q -v $b_end`;
+			$end   = $tmpArray[0];
+		}
+
+// -- Launch main proc
+		//
+		print ("\/\/ CMD : exportnCache \"" + $cacheName + "\" \"" + $cachePath + "\" " + $start + " " + $end + " " + "\n");
+		exportnCache $cacheName $cachePath $start $end;
+
+deleteUI -window $window;
+};
+
+
+
+
+global proc toggleCache()
+{
+	string $window  = "win_exportnCache";
+	string $b_cacheName	= ($window+"_cacheName");
+	string $c_cNode			= ($window+"_cNode");
+	string $L_cacheList=($window+"_cacheLST");
+	
+	
+	if (`checkBoxGrp -q -v1 $c_cNode` == 1)
+	{
+		textFieldGrp -e -en 0 $b_cacheName;
+		textScrollList -e -en 0 $L_cacheList;
+	}
+	else
+	{
+		textFieldGrp -e -en 1 $b_cacheName;
+		textScrollList -e -en 1 $L_cacheList;
+	}
+}
+
+global proc increment(){
+
+
+      string $window			= "win_exportnCache";
+      string $b_cacheName	= ($window+"_cacheName");
+      string $L_cacheList=($window+"_cacheLST");
+
+
+      $SelCache = `textScrollList -q -si $L_cacheList`;
+      $populateListCache=`textFieldGrp -e -tx $SelCache $b_cacheName`;
+
+
+}
+
+global proc AddlistCache(){
+
+
+    string $window			= "win_exportnCache";
+    string $L_cacheList=($window+"_cacheLST");
+    string $liststart[] = `ls -sl`;
+    string $listStart =`setDirectory($liststart[0])`;
+    string $listCache[] = `getFileList -fs ($listStart + "/" + "*.xml")`;
+
+      for($cache in  $listCache)
+	{
+	  string $removeExt =  `match "^[^\.]*" $cache`;
+	  $addList =`textScrollList -e -a $removeExt $L_cacheList`;
+
+	}
+
+}
+//***********************************************************************************
+//===================================================================================
+//-----------------------------------------------------------------------------------
+//-----------------------			UserInterface			-------------------------
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+global proc Crea_nCache()
+{
+	string $version = "v1.5";
+	string $window = "win_exportnCache";
+	string $liststart[] = `ls -sl`;
+	string $listStart =`setDirectory($liststart[0])`;
+	string $reduceName = `match "[^:]*$"  $liststart[0]`;
+	string $NameOK;
+	$check=`file -q -ex ($listStart + "/" + $reduceName + ".xml")`;
+	string $checkNumber[] = `getFileList -fs ($listStart + "/" + $reduceName +"*"+ ".xml")`;
+	int $versiom=`size($checkNumber)`;
+	int $verNum= $versiom + 1;
+
+
+
+	
+	
+	if (`window -ex $window`)
+	{
+		deleteUI -window $window;
+	}
+	
+	// -- Uses windowPref command to keep Window's position and to reset it's size (like -rtf flag)
+	//
+	if (`windowPref -exists $window`)
+	{
+		int $winTopEdge  = `windowPref -q -topEdge $window`;
+		int $winLeftEdge = `windowPref -q -leftEdge $window`;
+		
+		windowPref -remove $window;
+
+		$window = `window 	-title 		("Export nCache " + $version)
+							-topEdge 	$winTopEdge -leftEdge $winLeftEdge
+							-iconName 	"exportnCache"
+							-width 		310
+							-height 	280
+							-sizeable	true
+							$window`;
+	}
+	else
+	{
+		$window = `window 	-title 		("Export nCache " + $version)
+							-iconName 	"exportnCache"
+							-width 		310
+							-height 	280
+							-sizeable	true
+							$window`;
+	}
+	
+		
+			// EXPORT Form layout
+			//
+			string $exFormLyt = `formLayout -numberOfDivisions 100 exportFormLyt01`;
+												
+				string $exCoLyt = `columnLayout -adjustableColumn true exCoLyt01`;
+				
+					// Fields
+					string $b_cachePath = `textFieldButtonGrp
+										-l "Cache Dir"
+										-ed 1
+										-bl " Browse "
+										-cw 1 85
+										-cw 3 55
+										-adj 2										
+										-columnAttach 1 "left" 20
+										-columnAttach 1 "right" 5
+										-columnAttach 3 "left"  5
+										-columnAttach 3 "right" 5
+										-bc "setExpCachePath"
+										($window+"_cachePath")`;
+		
+					string $b_cacheName = `textFieldGrp
+										-l "Cache Name"
+										-ed 1
+										-cw 1 85
+										-adj 2
+									      -enable 1
+										-columnAttach 1 "left" 20
+										-columnAttach 2 "right" 5
+										($window+"_cacheName")`;
+				   
+				   separator -height 10 -style "none";
+				   
+					string $r_timeRg	 = `radioButtonGrp
+										-l "Time Range"
+										-vertical
+										-numberOfRadioButtons 2
+										-labelArray2 "Time Slider" "Start / End"
+										-select 1
+										-cw 1 70
+										-adj 2
+										-columnAttach 1 "left" 10
+										-columnAttach 2 "left" 5
+										-on1 "toggleRadio"
+										-on2 "toggleRadio"
+										($window+"_timeRg")`;
+	
+					string $b_start   = `intFieldGrp
+										-l "Start"
+										-enable 0
+										-cw 1 85
+										-cw 2 85
+										-columnAttach 1 "left" 20
+										-columnAttach 1 "right" 5
+										($window+"_start")`;
+	
+					string $b_end     = `intFieldGrp
+										-l "End"
+										-enable 0
+										-cw 1 85
+										-cw 2 85
+										-columnAttach 1 "left" 20
+										-columnAttach 1 "right" 5
+										($window+"_end")`;
+				   
+				   separator -height 10 -style "none";
+				   
+					  string $c_cNode     = `checkBoxGrp
+										-l1 "one file per object"
+										-cc "toggleCache"
+										-v1 false
+										-columnAttach 1 "left" 87
+										($window+"_cNode")`;
+
+				    separator -height 10 -style "none";
+
+				    text -l "Cache List" -align "left";
+
+				    separator -height 10 -style "single" ;
+
+					  string $L_cacheList =	`textScrollList 
+										-ann "cache List"										
+										-nr 3 
+										-ams 1  
+										-h 120 
+										-w 5 
+										-sc "increment"   
+										($window+"_cacheLST") `;
+
+				setParent ..;
+
+
+
+				
+				
+				// Buttons
+				string $b_create = `button -label "Create" -w 150 -command "apply" ($window+"_create")`;
+				
+				string $b_close = `button -label "Close" -w 150 -command ("deleteUI -window " + $window) ($window+"_close")`;
+	
+			setParent ..;
+	
+	
+
+	
+	
+	
+
+	
+	
+	// -- Edits the EXPORT form layout
+	//
+	formLayout -edit
+		-attachForm		 $exCoLyt		"top" 	  5
+		-attachForm     $exCoLyt		"left"    5
+		-attachForm     $exCoLyt		"right"   5
+		-attachControl	 $exCoLyt		"bottom"  5 $b_create
+		
+		-attachNone		 $b_create    	"top" 	  
+		-attachForm     $b_create	    "left"    5
+		-attachPosition $b_create	    "right"   5 50
+		-attachForm     $b_create	    "bottom"  5
+		
+		-attachNone		 $b_close    	"top" 	  
+		-attachPosition $b_close	    "left"    5 50
+		-attachForm     $b_close	    "right"   5
+		-attachForm     $b_close	    "bottom"  5
+		
+	$exFormLyt;
+	
+	
+
+	
+	
+	
+	
+		$populateFolder=`textFieldButtonGrp -e -tx $listStart $b_cachePath`;
+
+    if($check>0){
+
+      string $NameOK = $reduceName + "V0" + $verNum;
+      $populateFile=`textFieldGrp -e -tx $NameOK $b_cacheName`;
+      }
+
+    else{
+
+      string $NameOK = $reduceName;
+      $populateFile=`textFieldGrp -e -tx $NameOK $b_cacheName`;
+      }
+		
+ AddlistCache();
+	
+	// -- Launch the window
+	//
+	showWindow $window;
+}
+

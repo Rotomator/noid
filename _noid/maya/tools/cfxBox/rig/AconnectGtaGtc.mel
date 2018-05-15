@@ -1,0 +1,303 @@
+//=============================================================================
+//
+//	Connect GTA and GTC	- Script that gets all GTA and GTC objects, and connects them to an animation source
+//							- Gets corresponding animated object (source) for each GTA
+//							- Connects GTA objects to their source with a blendshape
+//							- Gets corresponding cache file for each GTC
+//
+//-----------------------------------------------------------------------------
+//
+// Version  :    1.6
+//
+// Created  :    07/09/2010
+// Modified :    14/09/2010
+//
+// Creator 	:    Ali
+// Contact 	:    chibi_ali@hotmail.com
+//
+//-----------------------------------------------------------------------------
+//
+// Use		:	- use "AconnectGtaGtc" to launch the script
+//
+//-----------------------------------------------------------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+
+
+
+
+
+
+//***********************************************************************************
+//===================================================================================
+//--------------------------------     Main Procs    --------------------------------
+//===================================================================================
+//***********************************************************************************
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that gets all GTA objects, and connects them to a matching animated object
+//
+//		>> returns the list of all connected GTA objects
+//
+//-------------------------------------------------------------------------
+
+global proc string[] AconnectGta()
+{
+	string $gtaObj[];
+	string $curGta;
+	string $gtaBaseNm;
+	string $gtaSourceL[];
+	string $gtaSource;
+	string $gtaSrcDupliGrp;
+	string $gtaSrcDupliL[];
+	string $curGtaBS[];
+	string $srcBSTagets[];
+	string $destBSConns[];
+	string $result[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Set current nameSpace to the default
+	//
+	namespace -setNamespace ":";
+	
+	
+	// ------------------------------------------------------------
+	// -- Get all objects suffixed with GTA (independently of nameSpace)
+	//
+	$gtaObj = `ls -type transform -recursive on "*_gta"`;	
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the source of each GTA and connect them
+	//
+	for ($curGta in $gtaObj)
+	{
+		// ------------------------------------------------------------
+		// -- Get the source obj that will be connected to the GTA
+		//
+		$gtaBaseNm = `substitute "^[^.]*:" $curGta ""`;
+		$gtaBaseNm = `substitute "_gta" $gtaBaseNm ""`;
+		
+		$gtaSourceL = `ls -type transform -recursive on ("*:" + $gtaBaseNm)`;
+		$gtaSource  = $gtaSourceL[0];
+		
+		
+		// ------------------------------------------------------------
+		// -- Check if multiple sources are found
+		//
+		if ( `size($gtaSourceL)` > 1 )
+		{
+			// Match the one having a "BDD" namespace
+			for ($curGtaSource in $gtaSourceL)
+			{
+				if (`gmatch $curGtaSource "*BDD*"`)
+				{
+					$gtaSource = $curGtaSource;
+					break;
+				}
+			}
+			
+			warning ("There are multiple sources that could be macthing \"" + $curGta + "\" ! Taking this one : \"" + $gtaSource + "\".");
+		}
+		else if ( `size($gtaSourceL)` == 0 )
+		{
+			warning ("There are NO source that could be macthing \"" + $curGta + "\" ! Skipping...");
+			continue;
+		}
+		
+		
+		// ------------------------------------------------------------
+		// -- Duplicate the source obj/group and connect it to the GTA obj/group
+		//
+		$gtaSrcDupliGrp = `substitute "^[^.]*:" $gtaSource ""`;
+		$gtaSrcDupliGrp = `createNode transform -n $gtaSrcDupliGrp`;
+		$gtaSrcDupliL   = A_dupliObj({$gtaSource});
+		parent $gtaSrcDupliL $gtaSrcDupliGrp;
+		
+		// BlendShape a source duplicate to avoid namespace errors (if source is a Reference)
+		$curGtaBS = `blendShape -n "blendShape_GTA_#" -before $gtaSrcDupliGrp $curGta`;
+		setAttr ($curGtaBS[0] + ".w[0]") 1;
+		
+		$srcBSTagets = `ls -type shape (listHistory ("-lv", 1, $curGtaBS[0]) )`; // $srcBSTagets and $gtaSrcDupliL should be the same
+		$gtaSourceL  = `filterExpand -fullPath false -sm 09 -sm 10 -sm 12 $gtaSource`;
+		
+		if (`size $srcBSTagets` != `size $gtaSourceL`) {
+			error ("Targets from \"" + $curGtaBS[0] + "\" and \"" + $gtaSource + "\" objects must have same object count !");
+		}
+		
+		// Replace [ dupli# > BS ] connections by [ source# > BS ]
+		for ($i=0; $i<size($srcBSTagets); $i++)
+		{
+			$destBSConns = `connectionInfo -dfs ($srcBSTagets[$i] + ".worldMesh[0]")`;
+			disconnectAttr ($srcBSTagets[$i] + ".worldMesh[0]") $destBSConns[0];
+			connectAttr -f ($gtaSourceL[$i] + ".worldMesh[0]") $destBSConns[0];
+		}
+		
+		delete $gtaSrcDupliGrp;
+		
+		$result[size($result)] = $curGta;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all connected GTA objects
+	//
+	select -r $result;
+	return $result;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that gets all GTC objects, and connects them to a matching cache
+//
+//		>> returns the list of all connected GTC objects
+//
+//-------------------------------------------------------------------------
+
+global proc string[] AconnectGtc()
+{
+	string $gtcObj[];
+	string $curGtc;
+	string $gtcBaseNm;
+	string $gtcSourceL[];
+	string $gtcSource;
+	string $curGtcSource;
+	string $srcCachesL[];
+	string $srcCache;
+	string $duplCache[];
+	string $hSwitch;
+	string $result[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Set current nameSpace to the default
+	//
+	namespace -setNamespace ":";
+	
+	
+	// ------------------------------------------------------------
+	// -- Get all objects suffixed with GTC (independently of nameSpace)
+	//
+	$gtcObj = `ls -type transform -recursive on "*_gtc"`;
+	
+	
+	// ------------------------------------------------------------
+	// -- Get the source object matching each GTC and get its cache
+	//
+	for ($curGtc in $gtcObj)
+	{
+		// ------------------------------------------------------------
+		// -- Get the matching source objects
+		//
+		$gtcBaseNm = `substitute "^[^.]*:" $curGtc ""`;
+		$gtcBaseNm = `substitute "_gtc" $gtcBaseNm ""`;
+		
+		$gtcSourceL = `ls -type transform -recursive on ("*:" + $gtcBaseNm)`;
+		$gtcSource  = $gtcSourceL[0];
+		
+		
+		// ------------------------------------------------------------
+		// -- Check if multiple sources are found
+		//
+		if ( `size($gtcSourceL)` > 1 )
+		{
+			// Match the one having a "BDD" namespace
+			for ($curGtcSource in $gtcSourceL)
+			{
+				if (`gmatch $curGtcSource "*BDD*"`)
+				{
+					$gtcSource = $curGtcSource;
+					break;
+				}
+			}
+			
+			warning ("There are multiple sources that could be macthing \"" + $curGtc + "\" ! Taking this one : \"" + $gtcSource + "\".");
+		}
+		else if ( `size($gtcSourceL)` == 0 )
+		{
+			warning ("There are NO source that could be macthing \"" + $curGtc + "\" ! Skipping...");
+			continue;
+		}
+		
+		
+		// ------------------------------------------------------------
+		// -- Get the cache of the source object and set a duplicate on the GTC object
+		//
+		$srcCachesL = `ls -type cacheFile (listHistory ("-breadthFirst", $gtcSource))`;
+		$srcCache   = $srcCachesL[0];
+		
+		if ( `size($srcCachesL)` > 1 )
+		{
+			warning ("There are multiple caches on source object \"" + $gtcSource + "\" ! Taking this one : \"" + $srcCachesL[0] + "\".");
+		}
+		else if ( `size($srcCachesL)` == 0 )
+		{
+			warning ("There are NO caches on source object \"" + $gtcSource + "\" ! Skipping...");
+			continue;
+		}
+		
+		$duplCache = `duplicate $srcCache`;
+		
+		$hSwitch = createHistorySwitch($curGtc,false);
+		$hSwitch = `rename $hSwitch "cacheSwitch#"`;
+		
+		connectAttr -f "time1.outTime" ($duplCache[0] + ".time");
+		connectAttr -f ($duplCache[0] + ".inRange") ($hSwitch + ".playFromCache");
+		connectAttr -f ($duplCache[0] + ".outCacheData[0]") ($hSwitch + ".inPositions[0]");		
+		
+		
+		$result[size($result)] = $curGtc;
+	}
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all connected GTC objects
+	//
+	select -r $result;
+	return $result;
+}
+
+
+
+//-------------------------------------------------------------------------
+//
+// Procedure that gets all GTA and GTC objects, and connects them to an animation source
+//
+//		>> returns the list of all connected GTA and GTC objects
+//
+//-------------------------------------------------------------------------
+
+global proc string[] AconnectGtaGtc()
+{
+	string $gtaObjL[];
+	string $gtcObjL[];
+	string $result[];
+	
+	
+	// ------------------------------------------------------------
+	// -- Get and connect all GTA objects
+	//
+	$gtaObjL = AconnectGta();
+	
+	
+	// ------------------------------------------------------------
+	// -- Get and connect all GTC objects
+	//
+	$gtcObjL = AconnectGtc();
+	
+	
+	// ------------------------------------------------------------
+	// -- Return all connected GTA and GTC objects
+	//
+	$result = stringArrayCatenate($gtaObjL, $gtcObjL);
+	
+	select -r $result;
+	return $result;
+}
