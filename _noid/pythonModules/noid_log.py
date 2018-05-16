@@ -1,11 +1,11 @@
 def debug(s) :
-    print("D : "+s)
+    print(s)
 
 def info(s) :
-    print("I : "+s)
+    print(s)
 
 def warning(s) :
-    print("W : "+s)
+    print(s)
 
 def error(s) :
-    print("E : "+s)
+    print(s)

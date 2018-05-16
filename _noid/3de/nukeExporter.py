@@ -5,15 +5,11 @@ import os
 import tde4
 
 # functions
-import scramble
 
-from cgev.tde import tools
-from cgev.pipeline.data import getdata
 
-from cgev.common import newconfig
-from cgev.common import log
+import tools
+import noid_log as log
 
-scramble
 
 
 def getLDNodeName(cam, direction, offset=0, index=0):
@@ -191,6 +187,7 @@ def exportNuke(cam, index, size, filepath, date, frameStart):
     else:
         undistoGroupLabel = '"Reference frame\\n' + camShortName + '"'
 
+    '''
     projectConfig = newconfig.ProjectCFile(projectName,
                                            projectPath,
                                            checkConfigured=False)
@@ -225,6 +222,12 @@ def exportNuke(cam, index, size, filepath, date, frameStart):
             readColorSpace = 'sRGB'
 
         colorspaceInLine = 'out_colorspace ' + readColorSpace
+    '''
+
+    cspaceInName = 'Lin_to_Log'
+    cspaceOutName = 'Log_to_Lin'
+    readColorSpace = 'sRGB'
+    colorspaceInLine = 'out_colorspace ' + readColorSpace
 
     log.debug("rez_x : " + str(rez_x))
     log.debug("rez_y : " + str(rez_y))
@@ -583,13 +586,8 @@ def toNuke(params, oneFile=False):
     # Launch batch Render
     log.debug('Launching batch Render')
 
-    from cgev.common import toBatch
+    import toBatch
     for argsToBatch in argsToBatchs:
-        if params['nukeVersion'] == 2:  # 'Nuke 7':
-            argsToBatch.append('7.0')
-        elif params['nukeVersion'] == 1:  # 'Nuke 8':
-            argsToBatch.append('8.0')
-
         toBatch.batch3DE(*(argsToBatch))
     return filesGenerated
 

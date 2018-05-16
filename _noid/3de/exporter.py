@@ -21,7 +21,7 @@ import mayaExporter
 import nukeExporter
 
 # cgev common import
-import noid_log
+import noid_log as log
 
 # nukeVersions = ['Nuke 8', 'Nuke 7']
 
@@ -266,9 +266,10 @@ def buildUI():
     labels.sort()
     labels.reverse()
 
-    tde4.addOptionMenuWidget(req, "nukeVersion", "Nuke Version", *labels)
+    print labels
+    #tde4.addOptionMenuWidget(req, "nukeVersion", "Nuke Version", *labels)
 
-    tde4.addToggleWidget(req, "openNuke", "Open nuke after Export", 0)
+    #tde4.addToggleWidget(req, "openNuke", "Open nuke after Export", 0)
 
     # To Export
     tde4.addSeparatorWidget(req, "sep2")
@@ -304,8 +305,8 @@ def exportCGEV():
         # get the parameters selecteds
         params = {}
         params['file_browser'] = tde4.getWidgetValue(req, "file_browser")
-        params['nukeVersion'] = tde4.getWidgetValue(req, "nukeVersion")
-        params['openNuke'] = tde4.getWidgetValue(req, "openNuke")
+        #params['nukeVersion'] = tde4.getWidgetValue(req, "nukeVersion")
+        #params['openNuke'] = tde4.getWidgetValue(req, "openNuke")
 
         params['cameras'] = []
         params['camerasOutSize'] = []
@@ -360,18 +361,18 @@ def exportCGEV():
 
 
         # open Nuke or not
-        if params['openNuke']:
-            for nukeFilePath in nukeFilesPath:
-                nukeExePath = findNukeExe(int(params['nukeVersion']))
-                toExecute = [nukeExePath, '-q', nukeFilePath]
-
-                log.debug(toExecute)
-
-                useSubProcess = True
-                if useSubProcess:
-                    subprocess.Popen(toExecute, executable=nukeExePath)
-                else:
-                    os.system(toExecute)
+#        if params['openNuke']:
+#            for nukeFilePath in nukeFilesPath:
+#                nukeExePath = findNukeExe(int(params['nukeVersion']))
+#                toExecute = [nukeExePath, '-q', nukeFilePath]
+#
+#                log.debug(toExecute)
+#
+#                useSubProcess = True
+#                if useSubProcess:
+#                    subprocess.Popen(toExecute, executable=nukeExePath)
+#                else:
+#                    os.system(toExecute)
 
         tde4.postQuestionRequester('Export finished',
                                    'All the cameras selected were exported',

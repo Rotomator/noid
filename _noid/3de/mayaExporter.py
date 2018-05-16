@@ -5,12 +5,8 @@ import vl_sdv
 
 import tde4
 
-import scramble
+import tools
 
-from cgev.tde import tools
-from cgev.pipeline.data import getdata
-
-scramble
 
 # global variables
 yup = 1

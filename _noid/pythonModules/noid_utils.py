@@ -1,4 +1,5 @@
 import os
+import time
 import datetime
 
 
@@ -37,3 +38,12 @@ def elapsedTimeStr(t) :
     if dt.seconds < 1 : return "< 1 second ago"
     elif dt.seconds == 1 : return "1 second ago"
     return "{} seconds ago".format(dt.seconds)
+
+''' dateTimeStr '''
+''' -----------------------------------------------------------------------------------------------------------------------------'''
+def dateTimeStr():
+    '''
+    return a formatted date
+    '''
+    date = time.strftime("%y%m%d%H%M%S", time.gmtime())  # YYMMDDhhmmss
+    return date
