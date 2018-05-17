@@ -39,7 +39,7 @@ VRAY_VERSION= os.getenv("VRAY_VERSION")
 ARCHIVE_VERSION= os.getenv("ARCHIVE_VERSION")
 
 noid_setEnvs([
-    'NOID_HOST'                                     , '172.16.21.1',
+    'NOID_HOST'                                     , 'localhost',
 
 	'ARCHIVE_PATH'					                , '%NOID_PATH%/archive/'+ARCHIVE_VERSION,
 
