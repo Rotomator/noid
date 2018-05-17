@@ -1,3 +1,4 @@
+import nuke
 import LensDistort.LensDistort_3de
 
 toolbar = nuke.toolbar("Nodes")
