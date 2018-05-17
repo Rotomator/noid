@@ -12,4 +12,5 @@ noidMenu.addSeparator()
 noidMenu.addCommand("Increment", "")
 
 
-import LensDistort.LensDistort_3de
+
+import loadPlugins
