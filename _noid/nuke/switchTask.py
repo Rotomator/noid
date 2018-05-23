@@ -10,19 +10,20 @@ import noid_database as ndb
 import listTable
 import infoTable
 
-import maya.OpenMaya as om
-import mayaUtils as mut
-import mayaSession
+#import maya.OpenMaya as om
+#import mayaUtils as mut
+#import mayaSession
 
 
 
 ''' currentTask_clear '''
 ''' ---------------------------------------------------------------------------------------------------------------------------- '''
 def currentTask_clear(*args, **kwargs) :
-    mayaSession.currentTask_clear()
+    return
+    #mayaSession.currentTask_clear()
 
-om.MSceneMessage.addCallback(om.MSceneMessage.kAfterNew, currentTask_clear)
-om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, currentTask_clear)
+#om.MSceneMessage.addCallback(om.MSceneMessage.kAfterNew, currentTask_clear)
+#om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, currentTask_clear)
 
 
 ''' projectListView '''
@@ -200,7 +201,7 @@ class taskListView(listTable._listTable) :
 class _switchTaskWnd(widgets.QDialog) :
     ''' __init__ '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
-    def __init__(self, parent= mut.mainWindow()) :
+    def __init__(self, parent) :
         super(_switchTaskWnd, self).__init__(parent)
 
         self.m_showMyTasks= True
@@ -216,7 +217,7 @@ class _switchTaskWnd(widgets.QDialog) :
         self.resize(600, 600)
 
         ''' restore geometry '''
-        self.settings= core.QSettings('noid', 'switchTaskWnd_maya')
+        self.settings= core.QSettings('noid', 'switchTaskWnd_nuke')
         geometry= self.settings.value('geometry', '')
         self.restoreGeometry(geometry)
 
@@ -329,7 +330,8 @@ class _switchTaskWnd(widgets.QDialog) :
         ''' close window '''
         self.close()
 
-        mayaSession.setCurrentTask(projectId, taskId)
+        #print "ok"
+        #mayaSession.setCurrentTask(projectId, taskId)
 
     ''' setShowEveryTasks '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
