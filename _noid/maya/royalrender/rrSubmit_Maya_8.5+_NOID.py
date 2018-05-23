@@ -1128,7 +1128,7 @@ def rrWritePassToFile(fileID, Layer, DPass, sceneInfo,camera,LocalTextureFile):
         if DPass.renderer != 'vray':
             rrWriteNodeStr(fileID,"Renderer", DPass.renderer)
         else:
-            rrWriteNodeStr(fileID,"Renderer", DPass.renderer+'CGEV')
+            rrWriteNodeStr(fileID,"Renderer", DPass.renderer+'NOID')
         rrWriteNodeStr(fileID,"RequiredPlugins", DPass.requiredPlugins)
         rrWriteNodeStr(fileID,"Camera",camera)
         rrWriteNodeStr(fileID,"Layer", Layer)
@@ -1174,7 +1174,7 @@ def rrWriteLayerToFile(fileID,Layer, channel,sceneInfo,camera,LocalTextureFile):
         if Layer.renderer != 'vray':
             rrWriteNodeStr(fileID,"Renderer", Layer.renderer)
         else:
-            rrWriteNodeStr(fileID,"Renderer", Layer.renderer+'CGEV')
+            rrWriteNodeStr(fileID,"Renderer", Layer.renderer+'NOID')
         rrWriteNodeStr(fileID,"RequiredPlugins", Layer.requiredPlugins)
         rrWriteNodeStr(fileID,"Camera",camera)
         rrWriteNodeStr(fileID,"Layer", Layer.name)
