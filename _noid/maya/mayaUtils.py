@@ -12,6 +12,7 @@ except ImportError:
     from shiboken import wrapInstance
 
 import os
+import maya.OpenMaya as om
 import maya.OpenMayaUI as omui
 import maya.cmds as cmds
 import maya.mel as mel
@@ -24,6 +25,12 @@ import noid_utils as nut
 def mainWindow() :
     ptr= omui.MQtUtil.mainWindow()
     return wrapInstance(long(ptr), widgets.QWidget)
+
+
+''' isBatchMode '''
+''' -----------------------------------------------------------------------------------------------------------------------------'''
+def isBatchMode() :
+    return om.MGlobal.mayaState() == om.MGlobal.kBatch
 
 
 ''' createProject '''
