@@ -4,8 +4,8 @@
 # 3DE4.script.comment: Export -  Maya and Nuke (new)
 # v150813 1000
 
-#import scramble
 
-#from cgev.tde.exporter import callBackExportAll, callBackExportCamera
+import exporter
 
-#from cgev.pipeline.appconnector.connectorMenu import MenuHandler; MenuHandler.openExportWindow()
+exporter.exportNOID()
+

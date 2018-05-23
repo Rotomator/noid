@@ -31,6 +31,7 @@ noidMenu.addCommand("Set Current Task", "noid.switchTaskWnd_show()")
 noidMenu.addSeparator()
 noidMenu.addCommand("Increment", "")
 
+<<<<<<< HEAD
 
 ''' write_addKnobs
     ---------------------------------------------------------------------------------------------------------------------------- '''
@@ -64,3 +65,10 @@ def write_addKnobs():
 
 # add callback to execute this every time a Write node is created
 nuke.addOnUserCreate(write_addKnobs, nodeClass= "Write")
+=======
+
+
+import loadPlugins
+
+
+>>>>>>> b51298b57f4efb8a05c8f5a92d93e62375ec9559
