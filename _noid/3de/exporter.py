@@ -1,3 +1,8 @@
+# 3DE4.script.name:      Export -  Maya & Nuke
+# 3DE4.script.version:   v1.0.2
+# 3DE4.script.gui:       Main Window::NOID
+# 3DE4.script.comment:   Creates a Nuke script file for the undistor / distor
+# v150622 1515
 
 import os
 import re
@@ -286,11 +291,11 @@ def buildUI():
     return req
 
 
-def exportNOID():
-    # print 'Start exportNOID'
+def exportCGEV():
+    # print 'Start exportCGEV'
     req = buildUI()
     ret = tde4.postCustomRequester(req,
-                                   "Export NOID - (Maya & Nuke)",
+                                   "Export CGEV - (Maya & Nuke)",
                                    0,
                                    0,
                                    "Export",
@@ -378,6 +383,3 @@ def exportNOID():
 
     message = 'End exportCGEV'
     log.debug(message)
-
-
-
