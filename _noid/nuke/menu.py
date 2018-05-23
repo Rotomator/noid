@@ -10,6 +10,7 @@ import nuke
 
 import noid
 import nukeSession
+import loadPlugins
 
 
 ''' currentTask_clear '''
@@ -64,3 +65,8 @@ def write_addKnobs():
 
 # add callback to execute this every time a Write node is created
 nuke.addOnUserCreate(write_addKnobs, nodeClass= "Write")
+
+
+''' load plugins
+    ---------------------------------------------------------------------------------------------------------------------------- '''
+loadPlugins.main()
