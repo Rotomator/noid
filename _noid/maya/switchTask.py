@@ -6,6 +6,8 @@ except ImportError:
     core.QItemSelectionModel= gui.QItemSelectionModel
     widgets.QHeaderView.setSectionResizeMode= widgets.QHeaderView.setResizeMode
 
+import maya.OpenMaya as om
+
 import noid_database as ndb
 import listTable
 import infoTable
