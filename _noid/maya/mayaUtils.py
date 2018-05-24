@@ -12,6 +12,7 @@ except ImportError:
     from shiboken import wrapInstance
 
 import os
+import maya.OpenMaya as om
 import maya.OpenMayaUI as omui
 import maya.cmds as cmds
 import maya.mel as mel

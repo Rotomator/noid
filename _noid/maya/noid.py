@@ -1,4 +1,5 @@
 import noid_database as ndb
+import mayaUtils as mut
 import mayaSession
 import switchTask
 import importAsset
@@ -6,6 +7,8 @@ import publish
 
 import maya.cmds as cmds
 
+
+print "Creating windows and menus..."
 
 ''' create windows
     ---------------------------------------------------------------------------------------------------------------------------- '''
