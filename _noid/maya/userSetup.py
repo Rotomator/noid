@@ -5,6 +5,7 @@ import os
 import sys
 import maya.cmds as cmds
 import maya.mel as mel
+import maya.OpenMaya as om
 
 
 ''' noid_path
@@ -83,6 +84,13 @@ sys.path.append(noid_path('%NOID_PATH%/maya/tools'))
 mel.eval('source "'+noid_path('%NOID_PATH%/maya/royalrender/noid_rrSubmit.mel')+'"')
 
 
+''' isBatchMode '''
+''' -----------------------------------------------------------------------------------------------------------------------------'''
+def isBatchMode() :
+    return om.MGlobal.mayaState() == om.MGlobal.kBatch
+
+
 ''' import noid module (deferred)
     ---------------------------------------------------------------------------------------------------------------------------- '''
-cmds.evalDeferred('import noid')
+if not isBatchMode() :
+    cmds.evalDeferred('import noid')

@@ -27,12 +27,6 @@ def mainWindow() :
     return wrapInstance(long(ptr), widgets.QWidget)
 
 
-''' isBatchMode '''
-''' -----------------------------------------------------------------------------------------------------------------------------'''
-def isBatchMode() :
-    return om.MGlobal.mayaState() == om.MGlobal.kBatch
-
-
 ''' createProject '''
 ''' -----------------------------------------------------------------------------------------------------------------------------'''
 def createProject(folder) :
