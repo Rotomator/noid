@@ -9,6 +9,8 @@ import maya.cmds as cmds
 
 
 if not mut.isBatchMode() :
+    print "Creating windows and menus..."
+
     ''' create windows
         ---------------------------------------------------------------------------------------------------------------------------- '''
     switchTaskWnd= switchTask._switchTaskWnd()

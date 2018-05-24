@@ -63,9 +63,9 @@ noid_setEnvs([
     '+MAYA_SCRIPT_PATH'                             , '%NOID_PATH%/maya/tools',
     '+MAYA_SCRIPT_PATH'                             , '%NOID_PATH%/maya/tools/cometScripts',
     'MAYA_ENABLE_LEGACY_VIEWPORT'                   , '1',
-    '+MAYA_PLUG_IN_PATH'                            ,'%NOID_BIN_PATH%/maya/plugins/smoothSkinClusterWeight',
-    '+MAYA_PLUG_IN_PATH'                            ,'%NOID_BIN_PATH%/maya/plugins/iDeform',
-    '+MAYA_PLUG_IN_PATH'                            ,'%NOID_BIN_PATH%/maya/plugins/ZivaVFX-Maya-1_2/plug-ins'
+    '+MAYA_PLUG_IN_PATH'                            , '%NOID_BIN_PATH%/maya/plugins/smoothSkinClusterWeight',
+    '+MAYA_PLUG_IN_PATH'                            , '%NOID_BIN_PATH%/maya/plugins/iDeform',
+    '+MAYA_PLUG_IN_PATH'                            , '%NOID_BIN_PATH%/maya/plugins/ZivaVFX-Maya-1_2/plug-ins'
 
 
 ])
