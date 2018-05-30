@@ -1,3 +1,4 @@
+SET RR_ROOT=\\storb\diskb\RoyalRender
 SET PYTHONPATH=%NOID_PATH%\pythonModules
 SET NUKE_PATH=%NOID_PATH%\nuke;%NOID_BIN_PATH%\nuke;%NOID_BIN_PATH%\nuke\LensDistort\Nuke10.5;%NOID_PATH%\nuke\gizmos
 

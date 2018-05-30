@@ -278,8 +278,7 @@ def batchNk(scene, path, first=1, last=1, write='Write1', clients=1,
         }
 
     thisBatch.setAttribs(job, att)
-    path = ("%s\\submitFiles\\nk_%s.xml") % (environment.getCGEVBasePath(),
-                                             helpers.dateTime())
+    path = ("%s\\submitFiles\\nk_%s.xml") % (os.getenv("NOID_PATH"),nut.dateTimeStr())
     return thisBatch.batch(path)
 
 

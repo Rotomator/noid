@@ -11,6 +11,7 @@ import nuke
 import noid
 import nukeSession
 import loadPlugins
+import batch
 
 
 ''' currentTask_clear '''
@@ -55,7 +56,7 @@ def write_addKnobs():
     node.addKnob(nuke.Text_Knob("",""))
 
     # batch
-    batch= nuke.PyScript_Knob("batch", "Batch", "")
+    batch= nuke.PyScript_Knob("batch", "Batch", "batch.batch()")
     batch.setFlag(nuke.STARTLINE)
     node.addKnob(batch)
 
@@ -63,8 +64,22 @@ def write_addKnobs():
     node['lock'].setValue(1)
 
 
+''' write_knobChanged
+    ---------------------------------------------------------------------------------------------------------------------------- '''
+def write_knobChanged():
+    node= nuke.thisNode()
+    knob= nuke.thisKnob()
+
+    if knob.name() == "lock" :
+        if knob.value() == 1 :
+            node['file'].setEnabled(False)
+        else :
+            node['file'].setEnabled(True)
+
+
 # add callback to execute this every time a Write node is created
 nuke.addOnUserCreate(write_addKnobs, nodeClass= "Write")
+nuke.addKnobChanged(write_knobChanged, nodeClass="Write")
 
 
 ''' load plugins
