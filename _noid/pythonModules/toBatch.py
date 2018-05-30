@@ -217,7 +217,7 @@ class Batch(object):
 
 
 def batchNk(scene, path, first=1, last=1, write='Write1', clients=1,
-            nukeVersion='6.0', defaultClientGroup=pullNk,
+            nukeVersion='8.0', defaultClientGroup=pullNk,
             singleOutPut=False, checkForFrames=True,
             colorId=BatchColor_Nuke, postjobList=list(),
             requiredlicense='', user=''):
