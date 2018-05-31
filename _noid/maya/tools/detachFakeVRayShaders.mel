@@ -1,0 +1,5 @@
+global proc detachFakeVRayShaders()
+{
+	if (catchQuiet(python("import loneShaders; loneShaders.detachLoneShaders()")))
+		print "ERROR : Failed to attach vray shaders\n";
+}

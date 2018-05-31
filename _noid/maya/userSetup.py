@@ -82,6 +82,12 @@ sys.path.append(noid_path('%NOID_PATH%/maya/tools'))
 mel.eval('source "'+noid_path('%NOID_PATH%/maya/royalrender/noid_rrSubmit.mel')+'"')
 
 
+''' attachFakeVRayShaders, detachFakeVRayShaders
+    ---------------------------------------------------------------------------------------------------------------------------- '''
+mel.eval('source "'+noid_path('%NOID_PATH%/maya/tools/attachFakeVRayShaders.mel')+'"')
+mel.eval('source "'+noid_path('%NOID_PATH%/maya/tools/detachFakeVRayShaders.mel')+'"')
+
+
 ''' isBatchMode '''
 ''' -----------------------------------------------------------------------------------------------------------------------------'''
 def isBatchMode() :
