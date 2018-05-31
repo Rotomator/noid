@@ -1,15 +1,16 @@
-from cgev.common import log
+import noid_log as log
+
 
 try:
     import maya.cmds as cmds  # @UnresolvedImport
 except ImportError:
-    log.error("Failed to import maya.cmds module")
+    log.error("Failed to import maya.cmds module.")
 
 
 def getLoneSG():
     to_bind = list()
 
-    log.info("Retrieve orphan SGs ...")
+    log.info("Retrieve orphan SGs...")
 
     # should be the "right" command but returns None sometimes :/
     # for name in cmds.listSets(t=1):
@@ -19,18 +20,18 @@ def getLoneSG():
             continue
 
         if name.startswith("initial"):
-            log.info("{0} is a base SG", name)
+            log.info("{} is a base SG".format(name))
             continue
 
         if not cmds.listConnections(name + ".surfaceShader"):
-            log.info("{0} has no shader associated", name)
+            log.info("{} has no shader associated".format(name))
             continue
 
         if cmds.sets(name, q=True):
-            log.info("{0} already has members", name)
+            log.info("{} already has members".format(name))
             continue
 
-        log.info("{0} seem empty", name)
+        log.info("{} seems empty".format(name))
         to_bind.append(name)
 
     return to_bind
@@ -40,17 +41,17 @@ def attachLoneShaders():
     shading_groups = getLoneSG()
 
     if shading_groups:
-        log.info("Got SG to attach : {0}", shading_groups)
+        log.info("Got SG to attach : {}".format(shading_groups))
 
         grp = "dummy_attachments"
         if cmds.objExists(grp):
-            log.info(". delete dummy group {0}", grp)
+            log.info(". delete dummy group {}".format(grp))
             cmds.delete(grp)
 
         objects = list()
 
         for sg in shading_groups:
-            log.info("... {0}", sg)
+            log.info("... {}".format(sg))
             obj = cmds.particle()
             obj = cmds.ls(obj, transforms=True)[0]
 
@@ -71,5 +72,5 @@ def attachLoneShaders():
 def detachLoneShaders():
     grp = "dummy_attachments"
     if cmds.objExists(grp):
-        log.info(". delete dummy group {0}", grp)
+        log.info(". delete dummy group {}".format(grp))
         cmds.delete(grp)
