@@ -133,7 +133,7 @@ class ControlMainWindow (widgets.QMainWindow):
             inc+=1
 
     def refresh(self):
-        gui.QApplication.instance().processEvents()
+        widgets.QApplication.instance().processEvents()
 
 
 
