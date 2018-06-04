@@ -10,33 +10,20 @@ import noid_database as ndb
 import listTable
 import infoTable
 
-<<<<<<< HEAD
-import maya.OpenMaya as om
-import mayaUtils as mut
-import mayaSession
-=======
 #import maya.OpenMaya as om
 #import mayaUtils as mut
 #import mayaSession
->>>>>>> c19bfa8b2e3b225b306790e2ed7f77464ba1d0e0
 
 
 
 ''' currentTask_clear '''
 ''' ---------------------------------------------------------------------------------------------------------------------------- '''
 def currentTask_clear(*args, **kwargs) :
-<<<<<<< HEAD
-    mayaSession.currentTask_clear()
-
-om.MSceneMessage.addCallback(om.MSceneMessage.kAfterNew, currentTask_clear)
-om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, currentTask_clear)
-=======
     return
     #mayaSession.currentTask_clear()
 
 #om.MSceneMessage.addCallback(om.MSceneMessage.kAfterNew, currentTask_clear)
 #om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, currentTask_clear)
->>>>>>> c19bfa8b2e3b225b306790e2ed7f77464ba1d0e0
 
 
 ''' projectListView '''
@@ -214,11 +201,7 @@ class taskListView(listTable._listTable) :
 class _switchTaskWnd(widgets.QDialog) :
     ''' __init__ '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''
-<<<<<<< HEAD
-    def __init__(self, parent= mut.mainWindow()) :
-=======
     def __init__(self, parent) :
->>>>>>> c19bfa8b2e3b225b306790e2ed7f77464ba1d0e0
         super(_switchTaskWnd, self).__init__(parent)
 
         self.m_showMyTasks= True
@@ -234,11 +217,7 @@ class _switchTaskWnd(widgets.QDialog) :
         self.resize(600, 600)
 
         ''' restore geometry '''
-<<<<<<< HEAD
-        self.settings= core.QSettings('noid', 'switchTaskWnd_maya')
-=======
         self.settings= core.QSettings('noid', 'switchTaskWnd_nuke')
->>>>>>> c19bfa8b2e3b225b306790e2ed7f77464ba1d0e0
         geometry= self.settings.value('geometry', '')
         self.restoreGeometry(geometry)
 
@@ -351,12 +330,8 @@ class _switchTaskWnd(widgets.QDialog) :
         ''' close window '''
         self.close()
 
-<<<<<<< HEAD
-        mayaSession.setCurrentTask(projectId, taskId)
-=======
         #print "ok"
         #mayaSession.setCurrentTask(projectId, taskId)
->>>>>>> c19bfa8b2e3b225b306790e2ed7f77464ba1d0e0
 
     ''' setShowEveryTasks '''
     ''' ------------------------------------------------------------------------------------------------------------------------ '''

@@ -217,11 +217,7 @@ class Batch(object):
 
 
 def batchNk(scene, path, first=1, last=1, write='Write1', clients=1,
-<<<<<<< HEAD
-            nukeVersion='6.0', defaultClientGroup=pullNk,
-=======
             nukeVersion='8.0', defaultClientGroup=pullNk,
->>>>>>> c19bfa8b2e3b225b306790e2ed7f77464ba1d0e0
             singleOutPut=False, checkForFrames=True,
             colorId=BatchColor_Nuke, postjobList=list(),
             requiredlicense='', user=''):
@@ -282,12 +278,7 @@ def batchNk(scene, path, first=1, last=1, write='Write1', clients=1,
         }
 
     thisBatch.setAttribs(job, att)
-<<<<<<< HEAD
-    path = ("%s\\submitFiles\\nk_%s.xml") % (environment.getCGEVBasePath(),
-                                             helpers.dateTime())
-=======
     path = ("%s\\submitFiles\\nk_%s.xml") % (os.getenv("NOID_PATH"),nut.dateTimeStr())
->>>>>>> c19bfa8b2e3b225b306790e2ed7f77464ba1d0e0
     return thisBatch.batch(path)
 
 

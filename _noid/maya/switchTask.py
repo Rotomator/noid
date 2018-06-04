@@ -6,14 +6,12 @@ except ImportError:
     core.QItemSelectionModel= gui.QItemSelectionModel
     widgets.QHeaderView.setSectionResizeMode= widgets.QHeaderView.setResizeMode
 
+import maya.OpenMaya as om
+
 import noid_database as ndb
 import listTable
 import infoTable
 
-<<<<<<< HEAD
-import maya.OpenMaya as om
-=======
->>>>>>> c19bfa8b2e3b225b306790e2ed7f77464ba1d0e0
 import mayaUtils as mut
 import mayaSession
 

@@ -1,23 +1,6 @@
 print "NOID pipeline initializing..."
 
 
-<<<<<<< HEAD
-import nuke
-import noid
-
-
-nukeMenu= nuke.menu("Nuke")
-noidMenu= nukeMenu.addMenu("NOID")
-noidMenu.addCommand("Set Current Task", "")
-noidMenu.addSeparator()
-noidMenu.addCommand("Increment", "")
-
-
-
-import loadPlugins
-
-
-=======
 try:
     from PySide2 import QtGui as gui
 except ImportError:
@@ -102,4 +85,3 @@ nuke.addKnobChanged(write_knobChanged, nodeClass="Write")
 ''' load plugins
     ---------------------------------------------------------------------------------------------------------------------------- '''
 loadPlugins.main()
->>>>>>> c19bfa8b2e3b225b306790e2ed7f77464ba1d0e0
