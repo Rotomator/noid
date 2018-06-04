@@ -1,0 +1,5 @@
+global proc attachFakeVRayShaders()
+{
+	if (catchQuiet(python("import loneShaders; loneShaders.attachLoneShaders()")))
+		print "ERROR : Failed to attach vray shaders\n";
+}

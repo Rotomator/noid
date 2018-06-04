@@ -1,4 +1,10 @@
+SET MAYA_MODULE_PATH=%MAYA_MODULE_PATH%;%NOID_PATH%\maya\modules
+SET MAYA_SHELF_PATH=%MAYA_SHELF_PATH%;%NOID_PATH%\maya\modules\archiveManager\shelves
+
+SET PYTHONPATH=C:\_noid\maya
+
 SET MAYA_VERSION=2018
 SET VRAY_VERSION=36004
 SET ARCHIVE_VERSION=0000_0011
+
 "C:\Program Files\Autodesk\Maya2018\bin\maya.exe"

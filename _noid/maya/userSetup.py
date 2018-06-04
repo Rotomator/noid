@@ -5,6 +5,7 @@ import os
 import sys
 import maya.cmds as cmds
 import maya.mel as mel
+import maya.OpenMaya as om
 
 
 ''' noid_path
@@ -63,11 +64,17 @@ noid_setEnvs([
     '+MAYA_SCRIPT_PATH'                             , '%NOID_PATH%/maya/tools',
     '+MAYA_SCRIPT_PATH'                             , '%NOID_PATH%/maya/tools/cometScripts',
     'MAYA_ENABLE_LEGACY_VIEWPORT'                   , '1',
+<<<<<<< HEAD
     '+MAYA_PLUG_IN_PATH'                            ,'%NOID_BIN_PATH%/maya/plugins/smoothSkinClusterWeight',
     '+MAYA_PLUG_IN_PATH'                            ,'%NOID_BIN_PATH%/maya/plugins/iDeform',
     '+MAYA_PLUG_IN_PATH'                            ,'%NOID_BIN_PATH%/maya/plugins/ZivaVFX-Maya-1_2/plug-ins'
 
 
+=======
+    '+MAYA_PLUG_IN_PATH'                            , '%NOID_BIN_PATH%/maya/plugins/smoothSkinClusterWeight',
+    '+MAYA_PLUG_IN_PATH'                            , '%NOID_BIN_PATH%/maya/plugins/iDeform',
+    '+MAYA_PLUG_IN_PATH'                            , '%NOID_BIN_PATH%/maya/plugins/ZivaVFX-Maya-1_2/plug-ins'
+>>>>>>> c19bfa8b2e3b225b306790e2ed7f77464ba1d0e0
 ])
 
 
@@ -83,6 +90,20 @@ sys.path.append(noid_path('%NOID_PATH%/maya/tools'))
 mel.eval('source "'+noid_path('%NOID_PATH%/maya/royalrender/noid_rrSubmit.mel')+'"')
 
 
+''' attachFakeVRayShaders, detachFakeVRayShaders
+    ---------------------------------------------------------------------------------------------------------------------------- '''
+mel.eval('source "'+noid_path('%NOID_PATH%/maya/tools/attachFakeVRayShaders.mel')+'"')
+mel.eval('source "'+noid_path('%NOID_PATH%/maya/tools/detachFakeVRayShaders.mel')+'"')
+
+
+''' isBatchMode '''
+''' -----------------------------------------------------------------------------------------------------------------------------'''
+def isBatchMode() :
+    return om.MGlobal.mayaState() == om.MGlobal.kBatch
+
+
 ''' import noid module (deferred)
     ---------------------------------------------------------------------------------------------------------------------------- '''
-cmds.evalDeferred('import noid')
+if not isBatchMode() :
+    cmds.evalDeferred('import noid')
+

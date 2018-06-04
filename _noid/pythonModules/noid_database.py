@@ -84,17 +84,29 @@ def publishTypeStr(publishType) :
 class link :
     def __init__(self) :
         ''' connect '''
-        self.m_cnx= mysql.connector.connect(user= _USER, password= _PASSWORD, host= _HOST, database= _DATABASE)
-        self.m_cursor= self.m_cnx.cursor()
+        try :
+            self.m_cnx= mysql.connector.connect(user= _USER, password= _PASSWORD, host= _HOST, database= _DATABASE)
+            self.m_cursor= self.m_cnx.cursor()
+        except :
+            self.m_cnx= 0
+            self.m_cursor= 0
 
     def __del__(self) :
         ''' commit & disconnect '''
-        self.m_cursor.close()
-        self.m_cnx.commit()
-        self.m_cnx.close()
+        if self.m_cursor :
+            self.m_cursor.close()
+
+        if self.m_cnx :
+            self.m_cnx.commit()
+            self.m_cnx.close()
+
+    def isValid(self) :
+        return self.m_cnx != 0
 
     def execute(self, query) :
-        self.m_cursor.execute(query)
+        if self.m_cursor :
+            self.m_cursor.execute(query)
+
         return self.m_cursor
 
 
@@ -106,6 +118,8 @@ def findUser() :
     global _g_user_name
 
     lnk= link()
+    if not lnk.isValid() :
+        return 0
 
     result= lnk.execute("SELECT m_id, m_login, m_name FROM tbl_user WHERE m_login= '{}'".format(getpass.getuser()))
     rows= result.fetchall()
