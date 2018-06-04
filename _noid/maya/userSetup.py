@@ -39,14 +39,14 @@ VRAY_VERSION= os.getenv("VRAY_VERSION")
 ARCHIVE_VERSION= os.getenv("ARCHIVE_VERSION")
 
 noid_setEnvs([
-    'NOID_HOST'                                     , '172.16.21.1',
+    'NOID_HOST'                                     , 'localhost',
 
 	'ARCHIVE_PATH'					                , '%NOID_PATH%/archive/'+ARCHIVE_VERSION,
 
 	'+VRAY_FOR_MAYA'+MAYA_VERSION+'_MAIN_x64'	    , '%NOID_BIN_PATH%/vray/'+VRAY_VERSION+'/maya'+MAYA_VERSION+'/maya_vray',
 	'+VRAY_FOR_MAYA'+MAYA_VERSION+'_PLUGINS_x64'    , '%VRAY_FOR_MAYA'+MAYA_VERSION+'_MAIN_x64%/vrayplugins',
 	'+VRAY_OSL_PATH_MAYA'+MAYA_VERSION+'_x64'	    , '%VRAY_FOR_MAYA'+MAYA_VERSION+'_PLUGINS_x64%',
-	'+VRAY_AUTH_CLIENT_FILE_PATH'	                , '%NOID_PATH%/maya/vray',
+	'+VRAY_AUTH_CLIENT_FILE_PATH'	                , '%NOID_BIN_PATH%/vray',
     '+PATH'                                         , '%NOID_BIN_PATH%/vray/'+VRAY_VERSION+'/maya'+MAYA_VERSION+'/maya_root/bin',
 	'+MAYA_PLUG_IN_PATH'			                , '%VRAY_FOR_MAYA'+MAYA_VERSION+'_MAIN_x64%/plug-ins',
 	'+MAYA_SCRIPT_PATH'				                , '%VRAY_FOR_MAYA'+MAYA_VERSION+'_MAIN_x64%/scripts',
@@ -66,8 +66,8 @@ noid_setEnvs([
     '+MAYA_PLUG_IN_PATH'                            ,'%NOID_BIN_PATH%/maya/plugins/smoothSkinClusterWeight',
     '+MAYA_PLUG_IN_PATH'                            ,'%NOID_BIN_PATH%/maya/plugins/iDeform',
     '+MAYA_PLUG_IN_PATH'                            ,'%NOID_BIN_PATH%/maya/plugins/ZivaVFX-Maya-1_2/plug-ins'
-    
-    
+
+
 ])
 
 
