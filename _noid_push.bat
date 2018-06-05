@@ -8,9 +8,6 @@ ECHO Syncing with repository...
 ECHO ===============================================================================
 
 
-COPY NUL %NOID_PATH%\time
-
-
 C:
 CD C:\_noid_dev
 
@@ -31,7 +28,8 @@ IF ERRORLEVEL==2 GOTO __end
 git push noid master
 
 
-robocopy /mir /nfl /ndl %NOID_PATH% \\ad01\tools\NOID /XF *.pyc /XD C:\_noid_dev\_noid\submitFiles
+COPY NUL %NOID_PATH%\time
+robocopy /mir /nfl /ndl %NOID_PATH% \\ad01\tools\NOID /XF *.pyc /XD submitFiles
 
 
 PAUSE

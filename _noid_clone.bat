@@ -11,7 +11,7 @@ IF ERRORLEVEL == 2 GOTO __end
 ECHO Creating backup (in C:\_noid_dev_old)...
 ECHO ===============================================================================
 
-@ROBOCOPY /mir /nfl /ndl C:\_noid_dev C:\_noid_dev_old /XF *.pyc /XD C:\_noid_dev\_noid\submitFiles
+@ROBOCOPY /mir /nfl /ndl C:\_noid_dev C:\_noid_dev_old /XF *.pyc /XD submitFiles
 
 
 ECHO Pulling from repository...
