@@ -14,7 +14,7 @@ CALL %varSet% RR_ROOT \\storb\diskb\RoyalRender
 
 REM nuke
 REM ----------------------------------------------------------------
-CALL %varAdd% NUKE_PATH %NOID_PATH%\nuke
+CALL %varSet% NUKE_PATH %NOID_PATH%\nuke
 CALL %varAdd% NUKE_PATH %NOID_BIN_PATH%\nuke
 CALL %varAdd% NUKE_PATH %NOID_BIN_PATH%\nuke\LensDistort\Nuke10.5
 CALL %varAdd% NUKE_PATH %NOID_PATH%\nuke\gizmos
