@@ -1,0 +1,5 @@
+IF DEFINED %1 (
+	CALL SET %1=%%%1%%;%2
+) ELSE (
+	CALL SET %1=%2
+)
