@@ -28,8 +28,8 @@ IF "%VRAY_VERSION%" == "" (
 REM maya
 REM ----------------------------------------------------------------
 CALL %varAdd% PYTHONPATH					%NOID_PATH%\maya
-CALL %varAdd% MAYA_MODULE_PATH				%NOID_PATH%\maya\modules
-CALL %varAdd% MAYA_SHELF_PATH				%NOID_PATH%\maya\shelves
+CALL %varSet% MAYA_MODULE_PATH				%NOID_PATH%\maya\modules
+CALL %varSet% MAYA_SHELF_PATH				%NOID_PATH%\maya\shelves
 CALL %varSet% MAYA_ENABLE_LEGACY_VIEWPORT	1
 
 
