@@ -46,7 +46,7 @@ class rrJob(object):
     """Stores scene information """
     version = ""
     software = ""
-    renderer = ""
+    renderer = "NOID"
     requiredPlugins = ""
     sceneName = ""
     sceneDatabaseDir = ""

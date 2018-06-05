@@ -1,34 +1,30 @@
-rem git remote set-url noid https://aganzerli:VVDokl123@github.com/aganzerli/noid.git
-rem git init
-
 @ECHO OFF
 
-copy NUL %NOID_PATH%\time
 
-c:
-cd C:\_noid_dev
+CHOICE /C YN /M "This will copy all files from repository, Are you sure"
+IF ERRORLEVEL == 2 GOTO __end
 
-@ECHO ON
+CHOICE /C YN /M "This will overwrite all your local files, are you really sure"
+IF ERRORLEVEL == 2 GOTO __end
+
+
+ECHO Creating backup (in C:\_noid_dev_old)...
+ECHO ===============================================================================
+
+@ROBOCOPY /mir /nfl /ndl C:\_noid_dev C:\_noid_dev_old /XF *.pyc
+
+
+ECHO Pulling from repository...
+ECHO ===============================================================================
+
+C:
+CD C:\_noid_dev
+
+git reset --hard noid/master
+git clean -fxd
 git pull noid master
-git status
-@ECHO OFF
 
-choice /c:YN
-IF ERRORLEVEL==2 GOTO __end
-
-@ECHO ON
-git add -A
-git commit -m "commit"
-@ECHO OFF
-
-choice /c:YN
-IF ERRORLEVEL==2 GOTO __end
-
-@ECHO ON
-git push noid master
-@ECHO OFF
-
-robocopy /mir %NOID_PATH% \\ad01\tools\NOID /XF *.pyc
 
 :__end
-EXIT 0
+@ECHO ON
+@EXIT /B 0

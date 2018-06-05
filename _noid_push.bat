@@ -3,32 +3,40 @@ rem git init
 
 @ECHO OFF
 
-copy NUL %NOID_PATH%\time
 
-c:
-cd C:\_noid_dev
+ECHO Syncing with repository...
+ECHO ===============================================================================
 
-@ECHO ON
+
+COPY NUL %NOID_PATH%\time
+
+
+C:
+CD C:\_noid_dev
+
 git pull noid master
 git status
-@ECHO OFF
 
-choice /c:YN
+CHOICE /C YN
 IF ERRORLEVEL==2 GOTO __end
 
-@ECHO ON
+
 git add -A
 git commit -m "commit"
-@ECHO OFF
 
-choice /c:YN
+CHOICE /C YN
 IF ERRORLEVEL==2 GOTO __end
 
-@ECHO ON
-git push noid master
-@ECHO OFF
 
-robocopy /mir %NOID_PATH% \\ad01\tools\NOID /XF *.pyc
+git push noid master
+
+
+robocopy /mir /nfl /ndl %NOID_PATH% \\ad01\tools\NOID /XF *.pyc
+
+
+PAUSE
+
 
 :__end
-EXIT 0
+@ECHO ON
+@EXIT /B 0
