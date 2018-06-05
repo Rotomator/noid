@@ -33,18 +33,18 @@ def noid_setEnvs(envs) :
         noid_setEnv(envs[i], envs[i+1])
 
 
-''' royalRender
-    ---------------------------------------------------------------------------------------------------------------------------- '''
+# royalRender
+# ----------------------------------------------------------------------------------------------------------------------------
 mel.eval('source "'+noid_path('%NOID_PATH%/maya/royalrender/noid_rrSubmit.mel')+'"')
 
 
-''' attachFakeVRayShaders, detachFakeVRayShaders
-    ---------------------------------------------------------------------------------------------------------------------------- '''
+# attachFakeVRayShaders, detachFakeVRayShaders
+# ----------------------------------------------------------------------------------------------------------------------------
 mel.eval('source "'+noid_path('%NOID_PATH%/maya/tools/attachFakeVRayShaders.mel')+'"')
 mel.eval('source "'+noid_path('%NOID_PATH%/maya/tools/detachFakeVRayShaders.mel')+'"')
 
 
-# isBatchMode '''
+# isBatchMode
 # ----------------------------------------------------------------------------------------------------------------------------
 def isBatchMode() :
     return om.MGlobal.mayaState() == om.MGlobal.kBatch
