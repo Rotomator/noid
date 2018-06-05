@@ -4,7 +4,7 @@
 
 @ECHO OFF
 ECHO Setting MAYA environment variables...
-ECHO ----------------------------------------------------------------
+ECHO -------------------------------------------------------------------------------
 
 
 REM required variables
@@ -41,9 +41,10 @@ CALL %varAdd% MAYA_PLUG_IN_PATH	%NOID_PATH%\maya\royalrender
 
 REM vray
 REM ----------------------------------------------------------------
-CALL %varAdd% PATH										%NOID_BIN_PATH%\vray\%VRAY_VERSION%\maya%MAYA_VERSION%\maya_root\bin
-
+CALL %varSet% VRAY_FOR_MAYA_ROOT						%NOID_BIN_PATH%\vray\%VRAY_VERSION%\maya%MAYA_VERSION%\maya_root
 CALL %varSet% VRAY_FOR_MAYA_MAIN						%NOID_BIN_PATH%\vray\%VRAY_VERSION%\maya%MAYA_VERSION%\maya_vray
+
+CALL %varAdd% PATH										%VRAY_FOR_MAYA_ROOT%\bin
 
 CALL %varAdd% PYTHONPATH								%VRAY_FOR_MAYA_MAIN%\scripts
 CALL %varAdd% VRAY_FOR_MAYA%MAYA_VERSION%_MAIN_x64		%VRAY_FOR_MAYA_MAIN%
@@ -53,6 +54,7 @@ CALL %varAdd% VRAY_AUTH_CLIENT_FILE_PATH				%NOID_BIN_PATH%\vray
 CALL %varAdd% MAYA_PLUG_IN_PATH							%VRAY_FOR_MAYA_MAIN%\plug-ins
 CALL %varAdd% MAYA_SCRIPT_PATH							%VRAY_FOR_MAYA_MAIN%\scripts
 CALL %varAdd% XBMLANGPATH								%VRAY_FOR_MAYA_MAIN%\icons
+CALL %varAdd% MAYA_RENDER_DESC_PATH						%VRAY_FOR_MAYA_ROOT%\bin\rendererDesc
 
 "%VRAY_FOR_MAYA_MAIN%\bin\setvrlservice.exe" -server=rr
 
