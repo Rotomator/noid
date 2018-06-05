@@ -1,9 +1,10 @@
-CALL %NOID_PATH%\env\_env_common
+@CALL %NOID_PATH%\env\_env_common
 @IF ERRORLEVEL 1 GOTO __error
 
 
 @ECHO OFF
 ECHO Setting MAYA environment variables...
+ECHO ----------------------------------------------------------------
 
 
 REM required variables

@@ -4,6 +4,7 @@ CALL %NOID_PATH%\env\_env_common
 
 @ECHO OFF
 ECHO Setting NUKE environment variables...
+ECHO ----------------------------------------------------------------
 
 
 REM royalrender

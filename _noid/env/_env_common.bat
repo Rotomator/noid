@@ -1,5 +1,6 @@
 @ECHO OFF
 ECHO Setting COMMON environment variables...
+ECHO ----------------------------------------------------------------
 
 
 REM required variables
