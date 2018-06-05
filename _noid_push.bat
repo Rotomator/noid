@@ -31,7 +31,7 @@ IF ERRORLEVEL==2 GOTO __end
 git push noid master
 
 
-robocopy /mir /nfl /ndl %NOID_PATH% \\ad01\tools\NOID /XF *.pyc
+robocopy /mir /nfl /ndl %NOID_PATH% \\ad01\tools\NOID /XF *.pyc /XD C:\_noid_dev\_noid\submitFiles
 
 
 PAUSE
